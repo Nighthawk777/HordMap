@@ -148,7 +148,6 @@ function disposeSingleMaterial(material) {
     if (typeof material.dispose === 'function') material.dispose();
 }
 
-/** Dispose a loaded model root when a load was superseded (avoids ghost meshes / double models). */
 /** Linear RGB from manifest `Paramters.Colors` entry (matches Oasis `Z(B.TeethColor)`). */
 function manifestLinearColorVec3(manifest, key, fallbackRgb) {
     const fb = fallbackRgb || [1, 1, 1];
@@ -283,18 +282,13 @@ window.SkinCreator = window.SkinCreator || {
     PRESET_KEY: 'dino_skin_presets',
     PRESET_KEY_GLITCH: 'dino_skin_presets_glitch',
     animationId: null,
-    /** Bumped on cleanup and each loadModel; stale async loaders must not add meshes to the scene. */
     _modelLoadToken: 0,
-    /** Stale texture loads for updateModelColors must not overwrite materials. */
     _updateColorsToken: 0,
-    /** Latest per-species manifest from `/models/{Name}/{Name}.json` (null if unavailable). */
     _currentSkinManifest: null,
-    /** When textures unchanged, drag-updates only touch these shared vec3s (no network / rebuild). */
     _manifestSkinTextureKey: null,
     _manifestSharedColorUniforms: null,
     _manifestSharedPresentationUniforms: null,
     _manifestColorRefreshRaf: null,
-    /** First GLB `map` captured after load — used as Oasis `uOrigMap` (alpha) across recolors. */
     _gltfBaseMapSource: null,
     _whiteFallbackMap: null,
     initRetries: 0,
@@ -307,14 +301,11 @@ window.SkinCreator = window.SkinCreator || {
     clock: null,
     gltfAnimationClips: [],
 
-    // Initialize Three.js scene
     init() {
-        // If already initialized and scene exists, just return
         if (this.isInitialized && this.scene && this.renderer) {
             return;
         }
 
-        // Check if Three.js is loaded
         if (typeof THREE === 'undefined') {
             this.initRetries++;
             if (this.initRetries < this.maxInitRetries) {
@@ -323,7 +314,6 @@ window.SkinCreator = window.SkinCreator || {
             return;
         }
 
-        // Check for required THREE extensions
         if (!THREE.OrbitControls || !THREE.OBJLoader || !THREE.GLTFLoader) {
             this.initRetries++;
             if (this.initRetries < this.maxInitRetries) {
@@ -341,16 +331,11 @@ window.SkinCreator = window.SkinCreator || {
             return;
         }
 
-        // Remove every canvas (double-init / slow navigation can leave more than one).
         this.modelViewer.querySelectorAll('canvas').forEach((c) => c.remove());
-
-        // Reset retry counter on successful init start
         this.initRetries = 0;
 
-        // Create scene (no scene.background — canvas is transparent so #modelViewer CSS shows through)
         this.scene = new THREE.Scene();
 
-        // Get container dimensions - use offsetWidth/Height for more reliable sizing
         const w = this.modelViewer.offsetWidth || this.modelViewer.clientWidth || 800;
         const h = this.modelViewer.offsetHeight || this.modelViewer.clientHeight || 700;
 
@@ -366,7 +351,6 @@ window.SkinCreator = window.SkinCreator || {
         if (THREE.sRGBEncoding !== undefined) {
             this.renderer.outputEncoding = THREE.sRGBEncoding;
         }
-        // Default until _installLighting + _applySkinViewerPresentationForMode (glitch = NoToneMapping).
         if (THREE.NoToneMapping !== undefined) {
             this.renderer.toneMapping = THREE.NoToneMapping;
         }
@@ -384,7 +368,6 @@ window.SkinCreator = window.SkinCreator || {
         this.renderer.domElement.style.height = '100%';
         this.modelViewer.appendChild(this.renderer.domElement);
 
-        // Force a resize after a short delay to ensure proper sizing
         setTimeout(() => {
             this.onWindowResize();
         }, 100);
@@ -392,7 +375,6 @@ window.SkinCreator = window.SkinCreator || {
         this._boundResize = this.onWindowResize.bind(this);
         window.addEventListener('resize', this._boundResize);
         
-        // Add controls
         this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
         this.controls.enableDamping = true;
         this.controls.dampingFactor = 0.05;
@@ -404,7 +386,6 @@ window.SkinCreator = window.SkinCreator || {
 
         this.clock = new THREE.Clock();
 
-        // Load initial model
         this.loadModel('Allosaurus');
         
         this.animate();
@@ -414,7 +395,6 @@ window.SkinCreator = window.SkinCreator || {
     cleanup() {
         this._modelLoadToken = (this._modelLoadToken || 0) + 1;
 
-        // Cancel animation frame
         if (this.animationId) {
             cancelAnimationFrame(this.animationId);
             this.animationId = null;
@@ -425,7 +405,6 @@ window.SkinCreator = window.SkinCreator || {
             this._boundResize = null;
         }
         
-        // Dispose of Three.js objects
         if (this.scene) {
             this.scene.traverse((object) => {
                 if (object.geometry) {
@@ -443,18 +422,15 @@ window.SkinCreator = window.SkinCreator || {
                     }
                 }
             });
-            // Clear scene
             while(this.scene.children.length > 0) {
                 this.scene.remove(this.scene.children[0]);
             }
         }
         
-        // Dispose controls
         if (this.controls) {
             this.controls.dispose();
         }
         
-        // Dispose renderer and remove from DOM
         if (this.renderer) {
             this.renderer.dispose();
             this.renderer.forceContextLoss();
@@ -481,7 +457,6 @@ window.SkinCreator = window.SkinCreator || {
         this._manifestSharedColorUniforms = null;
         this._manifestSharedPresentationUniforms = null;
 
-        // Reset variables
         this.scene = null;
         this.camera = null;
         this.renderer = null;
@@ -568,7 +543,6 @@ window.SkinCreator = window.SkinCreator || {
         this._applySkinViewerPresentationForMode();
     },
 
-    /** Glitch keeps legacy Oasis viewer (no ACES); normal skins use ACES Filmic ≈ UE default tonemapper + skylight. */
     _applySkinViewerPresentationForMode() {
         if (!this.renderer || !this.sunLight || !this.ambientLight) return;
 
@@ -625,12 +599,10 @@ window.SkinCreator = window.SkinCreator || {
         );
     },
 
-    /** Legacy hook; lighting matches Oasis fixed rig. */
     setSun(_azimuthDeg, _intensity) {},
 
     updateGroundPlane() {
         if (!this.scene) return;
-        // Without shadow maps, a ground plane only occludes the transparent canvas / CSS backdrop.
         if (this.groundMesh) {
             this.scene.remove(this.groundMesh);
             if (this.groundMesh.geometry) this.groundMesh.geometry.dispose();
@@ -748,14 +720,12 @@ window.SkinCreator = window.SkinCreator || {
 
     loadModel(modelName) {
         if (!this.scene) {
-            // Try to reinitialize if scene is missing
             if (!this.isInitialized) {
                 this.init();
             }
             return;
         }
 
-        // Remove existing model
         if (this.model) {
             this.scene.remove(this.model);
             if (this.mixer) {
@@ -791,10 +761,10 @@ window.SkinCreator = window.SkinCreator || {
         this._manifestSkinTextureKey = null;
         this._gltfBaseMapSource = null;
 
-        const manifestUrl = `/models/${modelName}/${modelName}.json`;
-        const objPath = `/models/${modelName}/${modelName}.obj`;
+        const manifestUrl = `models/${modelName}/${modelName}.json`;
+        const objPath = `models/${modelName}/${modelName}.obj`;
         const preferGlb = !!THREE.GLTFLoader;
-        const defaultGlbPath = `/models/${modelName}/${modelName}.glb`;
+        const defaultGlbPath = `models/${modelName}/${modelName}.glb`;
 
         const loadingOverlay = document.getElementById('loadingOverlay');
         if (loadingOverlay) {
@@ -884,7 +854,7 @@ window.SkinCreator = window.SkinCreator || {
                     manifest && typeof manifest.Model === 'string' && manifest.Model.trim()
                         ? manifest.Model.trim()
                         : `${modelName}.glb`;
-                tryLoadGltf(`/models/${modelName}/${file}`);
+                tryLoadGltf(`models/${modelName}/${file}`);
             })
             .catch(() => {
                 if (!this.scene || this._modelLoadToken !== expectedToken) return;
@@ -893,10 +863,6 @@ window.SkinCreator = window.SkinCreator || {
             });
     },
 
-    /**
-     * Debounced texture repaint for glitch edits — avoids reloading PNG every keystroke.
-     * @param {boolean} immediate - true: flush now (picker closed, blur, spinner commit).
-     */
     scheduleUpdateModelColors(immediate) {
         const run = () => {
             if (this._glitchTextureDebounceTimer) {
@@ -918,7 +884,6 @@ window.SkinCreator = window.SkinCreator || {
         this._glitchTextureDebounceTimer = setTimeout(run, 220);
     },
 
-    /** OS color picker → R/G/B float fields (0–1 like Oasis nt.channels; user may type negatives / HDR). */
     syncHexPickerToGlitchFloats(inputId) {
         const hexEl = document.getElementById(inputId);
         if (!hexEl) return;
@@ -968,10 +933,6 @@ window.SkinCreator = window.SkinCreator || {
         return Math.min(SKIN_VIEWER_TEXTURE_ANISOTROPY_CAP, r.capabilities.getMaxAnisotropy());
     },
 
-    /**
-     * Full anisotropic + trilinear mips where supported (typical game / web viewers, incl. sharp oblique UVs).
-     * @param {THREE.Texture|null|undefined} tex
-     */
     _upgradeTextureQuality(tex) {
         if (!tex || !this.renderer) return;
         const maxA = this._skinViewerMaxAnisotropy();
@@ -994,7 +955,6 @@ window.SkinCreator = window.SkinCreator || {
         tex.needsUpdate = true;
     },
 
-    /** Applies _upgradeTextureQuality to every map slot on a material. */
     _upgradeMaterialTextures(mat) {
         if (!mat) return;
         [
@@ -1012,7 +972,6 @@ window.SkinCreator = window.SkinCreator || {
         });
     },
 
-    /** Walk a loaded scene root (e.g. glTF) and upgrade embedded textures before materials are replaced. */
     _upgradeModelTextures(root) {
         if (!root) return;
         root.traverse((obj) => {
@@ -1037,7 +996,6 @@ window.SkinCreator = window.SkinCreator || {
         );
     },
 
-    /** Manifest path: same as Oasis viewer — body uColor slots use raw r,g,b from inputs; hex pickers → ÷255. */
     _skinVec3UniformLikeOasis(inputId) {
         const rgb = this.getSkinColorRgb(inputId);
         if (this.isGlitchSkinMode()) {
@@ -1046,7 +1004,6 @@ window.SkinCreator = window.SkinCreator || {
         return new THREE.Vector3(rgb.r / 255, rgb.g / 255, rgb.b / 255);
     },
 
-    /** Persisted vec3 objects wired to every skin material’s shader (live color drag). */
     _ensureManifestSharedColorUniforms() {
         if (this._manifestSharedColorUniforms) return this._manifestSharedColorUniforms;
         this._manifestSharedColorUniforms = {
@@ -1103,7 +1060,6 @@ window.SkinCreator = window.SkinCreator || {
         this._syncManifestPresentationUniformsFromMode();
     },
 
-    /** One 3D refresh per animation frame while dragging (avoids piled-up work). */
     _scheduleManifestColorPreviewRefresh() {
         if (this._manifestColorRefreshRaf != null) return;
         this._manifestColorRefreshRaf = requestAnimationFrame(() => {
@@ -1138,15 +1094,10 @@ window.SkinCreator = window.SkinCreator || {
         const baseMaskRel = texRoot.BaseMask;
         const albedoRel = texRoot.AlbedoMap || '';
         if (!patternRel || !baseMaskRel) return null;
-        /** Bust cache when glitch toggles — ID masks use mip+linear vs nearest sampling. */
         const msk = this.isGlitchSkinMode() ? 'g' : 'n';
         return `${dinoName}|${patternIndex}|${ageStage}|${baseMaskRel}|${patternRel}|${albedoRel}|${msk}`;
     },
 
-    /**
-     * Base + pattern PNGs are ID masks (pure primaries). Mip + trilinear minification blends channels and
-     * breaks the shader’s fR/fG/… products → wrong mixes and bright halos when zoomed out.
-     */
     _prepareSkinIdMaskTexture(tex) {
         if (!tex) return;
         tex.generateMipmaps = false;
@@ -1158,7 +1109,6 @@ window.SkinCreator = window.SkinCreator || {
         tex.needsUpdate = true;
     },
 
-    /** Clone loaded PNGs; albedo keeps mips (smooth). ID masks get point sampling via _prepareSkinIdMaskTexture. */
     _cloneTextureLikeMap(sourceTex, refMap, skinnedMesh) {
         const t = sourceTex.clone();
         t.needsUpdate = true;
@@ -1202,14 +1152,12 @@ window.SkinCreator = window.SkinCreator || {
             return;
         }
 
-        // 1. СТАБИЛЬНЫЙ ХАК ДЛЯ ПЕРВОГО ПАТТЕРНА: Если ползунок на 0, уходим в Legacy режим к файлу Pattern_1.png
         if (patternIndex === "0") {
             this.updateModelColorsLegacy();
             return;
         }
 
-        // 2. ВОЗВРАЩАЕМ ЗАВОДСКУЮ ЛОГИКУ: Пускай resolvePatternEntry сама решает, какой индекс брать из JSON
-        const base = `/models/${dinoName}/`;
+        const base = `models/${dinoName}/`;
         const texRoot = manifest.BodyMaterial.Textures;
         const patternRel = resolvePatternEntryFromManifest(manifest, ageStage, patternIndex);
         const baseMaskRel = texRoot.BaseMask;
@@ -1292,7 +1240,6 @@ window.SkinCreator = window.SkinCreator || {
                     const uvRef = glbMap || refMap;
                     const bm = this._cloneTextureLikeMap(baseTex, uvRef, skinned);
                     const pm = this._cloneTextureLikeMap(patternTex, uvRef, skinned);
-                    /** Point-sampled ID masks kill zoomed-out halos on normal skins; glitch keeps legacy mip+linear look. */
                     if (!this.isGlitchSkinMode()) {
                         this._prepareSkinIdMaskTexture(bm);
                         this._prepareSkinIdMaskTexture(pm);
@@ -1406,25 +1353,22 @@ window.SkinCreator = window.SkinCreator || {
         const patternIndex = document.getElementById('pattern').value;
         const dinoName = document.getElementById('modelSelect').value;
         const textureLoader = new THREE.TextureLoader();
-        // Use absolute path for Next.js public folder
         const ageStageEl = document.getElementById('age-stage');
         const ageStage = ageStageEl ? ageStageEl.value : 'Adult';
-        // Переводим индекс ползунка (0, 1, 2) в правильный номер файла (1, 2, 3)
-const filePatternNum = parseInt(patternIndex, 10) + 1;
+        
+        const filePatternNum = parseInt(patternIndex, 10) + 1;
 
-const texturePath = ageStage === 'Adult'
-    ? `/models/${dinoName}/T_${dinoName}_Adult_Pattern_${filePatternNum}.png`
-    : `/models/${dinoName}/T_${dinoName}_${ageStage}_Pattern.png`;
+        const texturePath = ageStage === 'Adult'
+            ? `models/${dinoName}/T_${dinoName}_Adult_Pattern_${filePatternNum}.png`
+            : `models/${dinoName}/T_${dinoName}_${ageStage}_Pattern.png`;
         
         console.log('Loading texture from:', texturePath);
 
         textureLoader.load(
             texturePath,
-            // Success callback
             (texture) => {
                 console.log('Texture loaded successfully');
             
-            // Create canvas to manipulate texture
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             const img = texture.image;
@@ -1432,22 +1376,19 @@ const texturePath = ageStage === 'Adult'
             canvas.height = img.height;
             ctx.drawImage(img, 0, 0);
             
-            // Get image data for color manipulation
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const data = imageData.data;
             
-            // Color mapping with exact RGB values and stricter tolerance
             const colorMapping = {
-                "maleDisplay": { color: [255, 0, 0], tolerance: 10 },      // Pure Red
-                "markings": { color: [255, 0, 255], tolerance: 10 },       // Magenta
-                "flank": { color: [0, 0, 255], tolerance: 10 },            // Pure Blue
-                "body": { color: [0, 255, 255], tolerance: 30 },          // Cyan
-                "underbelly": { color: [0, 255, 0], tolerance: 10 },       // Pure Green
-                "detail1": { color: [128, 0, 128], tolerance: 10 },        // Purple
-                "eyes": { color: [255, 255, 0], tolerance: 10 }            // Yellow
+                "maleDisplay": { color: [255, 0, 0], tolerance: 10 },      
+                "markings": { color: [255, 0, 255], tolerance: 10 },       
+                "flank": { color: [0, 0, 255], tolerance: 10 },            
+                "body": { color: [0, 255, 255], tolerance: 30 },          
+                "underbelly": { color: [0, 255, 0], tolerance: 10 },       
+                "detail1": { color: [128, 0, 128], tolerance: 10 },        
+                "eyes": { color: [255, 255, 0], tolerance: 10 }            
             };
 
-            // Debug information
             this.debugInfo = {
                 imageSize: { width: canvas.width, height: canvas.height },
                 colorMapping: colorMapping,
@@ -1456,63 +1397,47 @@ const texturePath = ageStage === 'Adult'
                 matchedPixels: {}
             };
             
-            // Helper function to check if colors match within tolerance with improved accuracy
             const colorsMatch = (r1, g1, b1, [r2, g2, b2], tolerance, part) => {
-                // Calculate color differences with weighted components
                 const dr = Math.abs(r1 - r2);
                 const dg = Math.abs(g1 - g2);
                 const db = Math.abs(b1 - b2);
                 
-                // For body part, use original tolerance logic with extra cyan check
                 if (part === 'body') {
                     const matches = dr <= tolerance && dg <= tolerance && db <= tolerance;
                     if (matches) {
-                        // For cyan, green and blue should be higher than red
                         return g1 > r1 + 5 && b1 > r1 + 5;
                     }
                     return false;
                 }
 
-                // Check if all selected colors are black
                 const allBlack = Object.entries(this.debugInfo.selectedColors).every(([_, color]) => 
                     color.rgb.r === 0 && color.rgb.g === 0 && color.rgb.b === 0
                 );
 
                 if (allBlack) {
-                    // When all colors are black, use the original color's characteristics
-                    // to determine which part the pixel belongs to
                     switch(part) {
                         case 'markings':
-                            // Magenta: high red and blue, low green
                             return r1 > g1 + 50 && b1 > g1 + 50;
                         case 'flank':
-                            // Blue: high blue, low red and green
                             return b1 > r1 + 50 && b1 > g1 + 50;
                         case 'body':
-                            // Cyan: high green and blue, low red
                             return g1 > r1 + 50 && b1 > r1 + 50;
                         case 'underbelly':
-                            // Green: high green, low red and blue
                             return g1 > r1 + 50 && g1 > b1 + 50;
                         case 'maleDisplay':
-                            // Red: high red, low green and blue
                             return r1 > g1 + 50 && r1 > b1 + 50;
                         case 'detail1':
-                            // Purple: balanced red and blue, low green
                             return Math.abs(r1 - b1) < 20 && r1 > g1 + 30;
                         case 'eyes':
-                            // Yellow: high red and green, low blue
                             return r1 > b1 + 50 && g1 > b1 + 50;
                         default:
                             return false;
                     }
                 }
 
-                // For normal colors, use standard tolerance matching
                 const matches = dr <= tolerance && dg <= tolerance && db <= tolerance;
                 if (!matches) return false;
 
-                // Check for better matches in other parts
                 for (const [otherPart, { color }] of Object.entries(colorMapping)) {
                     if (otherPart !== part) {
                         const [or, og, ob] = color;
@@ -1531,7 +1456,6 @@ const texturePath = ageStage === 'Adult'
                 return true;
             };
 
-            // First pass: Create a mask for each color region
             const masks = {};
             const pixelCounts = {};
             for (const part in colorMapping) {
@@ -1539,14 +1463,12 @@ const texturePath = ageStage === 'Adult'
                 pixelCounts[part] = 0;
             }
 
-            // Create masks for each color region
             for (let i = 0; i < data.length; i += 4) {
                 const r = data[i];
                 const g = data[i + 1];
                 const b = data[i + 2];
                 const pixelIndex = i / 4;
 
-                // Find the best matching part for this pixel
                 let bestPart = null;
                 let bestDiff = Infinity;
 
@@ -1561,23 +1483,19 @@ const texturePath = ageStage === 'Adult'
                     }
                 }
 
-                // Only assign the pixel to the best matching part
                 if (bestPart) {
                     masks[bestPart][pixelIndex] = 1;
                     pixelCounts[bestPart]++;
                 }
             }
 
-            // Store debug information
             this.debugInfo.pixelCounts = pixelCounts;
             
-            // Apply new colors using the masks
             for (const [part, mask] of Object.entries(masks)) {
                 const picker = document.getElementById(part + 'Color');
                 if (picker) {
                     const newColor = this.getSkinColorPreviewBytes(part + 'Color');
                     if (newColor) {
-                        // Store selected colors for debugging
                         this.debugInfo.selectedColors[part] = {
                             hex: picker.value,
                             rgb: newColor,
@@ -1590,7 +1508,7 @@ const texturePath = ageStage === 'Adult'
                                 data[pixelIndex] = newColor.r;
                                 data[pixelIndex + 1] = newColor.g;
                                 data[pixelIndex + 2] = newColor.b;
-                                data[pixelIndex + 3] = 255; // Full opacity
+                                data[pixelIndex + 3] = 255; 
                             }
                         }
                     }
@@ -1638,12 +1556,8 @@ const texturePath = ageStage === 'Adult'
                 }
             }
             
-            // Put the modified image data back
             ctx.putImageData(imageData, 0, 0);
 
-            // Base texture from canvas (sRGB — matches HTML color pickers and pattern PNGs).
-            // GLB/glTF meshes need flipY=false and often per-material map offset/repeat/rotation
-            // (KHR_texture_transform). Sharing one Texture for all meshes loses that and looks "messy".
             const baseTextureTemplate = new THREE.Texture(canvas);
             baseTextureTemplate.needsUpdate = true;
             if (THREE.sRGBEncoding !== undefined) {
@@ -1745,36 +1659,29 @@ const texturePath = ageStage === 'Adult'
                 }
             });
             
-            // Force render update
             if (this.renderer && this.scene && this.camera) {
                 this.renderer.render(this.scene, this.camera);
             }
 
             this.syncColorPreviewDots();
         },
-        // Progress callback
         undefined,
-        // Error callback
         (error) => {
             console.error('Failed to load texture:', texturePath);
             console.error('Error details:', error);
 
-            // Show user-friendly error message
             const errorMsg = `Could not load pattern ${patternIndex} for ${dinoName}. The texture file may be missing.`;
             console.warn(errorMsg);
 
-            // Optionally show a visual notification
             if (this.showModal) {
                 this.showModal('Texture Load Error', errorMsg);
             }
         });
     },
 
-    // Add debug mode function
     debugColors() {
         if (!this.model) return;
 
-        // Make the model black for visualization
         this.model.traverse((child) => {
             if (child instanceof THREE.Mesh) {
                 const skinned = child instanceof THREE.SkinnedMesh;
@@ -1792,19 +1699,15 @@ const texturePath = ageStage === 'Adult'
             }
         });
 
-        // Force render update
         if (this.renderer && this.scene && this.camera) {
             this.renderer.render(this.scene, this.camera);
         }
 
-        // Get pattern index early
         const patternIndex = document.getElementById('pattern')?.value || '0';
 
-        // Enhanced debug information
         console.log('=== ENHANCED DEBUG INFORMATION ===');
         console.log('Image size:', this.debugInfo.imageSize);
         
-        // Color mapping information
         console.log('\nColor Mapping Analysis:');
         Object.entries(this.debugInfo.colorMapping).forEach(([part, info]) => {
             const [r, g, b] = info.color;
@@ -1812,7 +1715,6 @@ const texturePath = ageStage === 'Adult'
             console.log(`  Base Color: RGB(${r}, ${g}, ${b})`);
             console.log(`  Current Tolerance: ${info.tolerance}`);
             
-            // Get the selected color for this part
             const picker = document.getElementById(part + 'Color');
             if (picker) {
                 const hex = picker.value;
@@ -1822,7 +1724,6 @@ const texturePath = ageStage === 'Adult'
                 }
             }
             
-            // Calculate color characteristics
             const colorTotal = r + g + b;
             const dominantChannel = Math.max(r, g, b);
             const isRed = r === dominantChannel;
@@ -1834,25 +1735,20 @@ const texturePath = ageStage === 'Adult'
             console.log(`    - Dominant Channel: ${isRed ? 'Red' : isGreen ? 'Green' : 'Blue'}`);
             console.log(`    - R:G:B Ratio: ${(r/dominantChannel).toFixed(2)}:${(g/dominantChannel).toFixed(2)}:${(b/dominantChannel).toFixed(2)}`);
             
-            // Get pixel count
             const count = this.debugInfo.pixelCounts[part] || 0;
             console.log(`  Matched Pixels: ${count}`);
             
-            // Calculate recommended tolerance
             let recommendedTolerance = 10;
             
             if (patternIndex === '1' || patternIndex === '2') {
-                // For problematic patterns, calculate based on color characteristics
                 const colorSpread = Math.max(Math.abs(r - g), Math.abs(g - b), Math.abs(r - b));
                 recommendedTolerance = Math.max(5, Math.min(15, Math.floor(colorSpread * 0.15)));
             } else {
-                // For other patterns, use color intensity based calculation
                 recommendedTolerance = Math.max(5, Math.min(20, Math.floor(colorTotal * 0.02)));
             }
             
             console.log(`  Recommended Tolerance: ${recommendedTolerance}`);
             
-            // Overlap analysis
             if (this.debugInfo.pixelCounts[part] > 0) {
                 const expectedPixels = this.debugInfo.imageSize.width * this.debugInfo.imageSize.height / Object.keys(this.debugInfo.colorMapping).length;
                 const overlapRatio = this.debugInfo.pixelCounts[part] / expectedPixels;
@@ -1865,7 +1761,6 @@ const texturePath = ageStage === 'Adult'
             }
         });
 
-        // Pattern-specific analysis
         console.log('\nPattern Analysis:');
         console.log(`Current Pattern: ${patternIndex}`);
         console.log(`Pattern Characteristics:`);
@@ -1883,7 +1778,6 @@ const texturePath = ageStage === 'Adult'
                 break;
         }
 
-        // Overall recommendations
         console.log('\nRecommendations:');
         const totalPixels = Object.values(this.debugInfo.pixelCounts).reduce((a, b) => a + b, 0);
         const coverage = totalPixels / (this.debugInfo.imageSize.width * this.debugInfo.imageSize.height);
@@ -1903,7 +1797,6 @@ const texturePath = ageStage === 'Adult'
         }
     },
 
-    // Show server selection modal (EU or NA) - returns 'EU' or 'NA' or null if cancelled
     showServerSelectionModal() {
         return new Promise((resolve) => {
             const overlay = document.createElement('div');
@@ -1946,9 +1839,7 @@ const texturePath = ageStage === 'Adult'
         });
     },
 
-    // Create and show a progress modal (no buttons, can be updated)
     showProgressModal(title, content) {
-        // Remove any existing progress modal
         const existingModal = document.getElementById('skin-progress-modal');
         if (existingModal) {
             existingModal.remove();
@@ -1973,7 +1864,6 @@ const texturePath = ageStage === 'Adult'
             </div>
         `;
         
-        // Add spin animation if not already present
         if (!document.getElementById('spin-animation-style')) {
             const style = document.createElement('style');
             style.id = 'spin-animation-style';
@@ -2001,7 +1891,6 @@ const texturePath = ageStage === 'Adult'
         };
     },
 
-    // Create and show a modal
     showModal(title, content, type = 'info', options = {}) {
         const overlay = document.createElement('div');
         overlay.className = 'modal-backdrop skin-creator-modal';
@@ -2079,7 +1968,6 @@ const texturePath = ageStage === 'Adult'
                 });
             }
 
-            // Close on overlay click if not input modal
             if (!options.input) {
                 overlay.addEventListener('click', (e) => {
                     if (e.target === overlay) {
@@ -2090,7 +1978,6 @@ const texturePath = ageStage === 'Adult'
         });
     },
 
-    // Show cooldown modal with Patreon promotion (Nerf 2.0 style)
     showCooldownModalWithPatreon(timeMessage) {
         return new Promise((resolve) => {
             const overlay = document.createElement('div');
@@ -2183,14 +2070,12 @@ const texturePath = ageStage === 'Adult'
                 }, 300);
             };
             
-            // Close on backdrop click
             overlay.addEventListener('click', (e) => {
                 if (e.target === overlay) {
                     cleanup();
                 }
             });
             
-            // Close button click handler
             const closeBtn = overlay.querySelector('.close-cooldown-modal');
             if (closeBtn) {
                 closeBtn.addEventListener('click', cleanup);
@@ -2198,7 +2083,6 @@ const texturePath = ageStage === 'Adult'
         });
     },
 
-    // Funktion för att spara preset — standard vs glitch (Sub+), separate localStorage buckets.
     async savePreset() {
         try {
             const saveAsGlitch = this.isGlitchSkinMode() && this.canSaveFullGlitchPreset();
@@ -2220,7 +2104,7 @@ const texturePath = ageStage === 'Adult'
                 }
             );
 
-            if (!presetName) return; // User cancelled
+            if (!presetName) return; 
 
             const storeKey = saveAsGlitch ? this.PRESET_KEY_GLITCH : this.PRESET_KEY;
             const presets = JSON.parse(localStorage.getItem(storeKey)) || {};
@@ -2298,7 +2182,6 @@ const texturePath = ageStage === 'Adult'
         }
     },
 
-    // Load a preset (standard or glitch bucket).
     async loadPreset(presetName, bucket) {
         try {
             const storeKey = bucket === 'glitch' ? this.PRESET_KEY_GLITCH : this.PRESET_KEY;
@@ -2389,7 +2272,6 @@ const texturePath = ageStage === 'Adult'
         }
     },
 
-    // Delete a preset from standard or glitch storage.
     async deletePreset(presetName, bucket) {
         try {
             const storeKey = bucket === 'glitch' ? this.PRESET_KEY_GLITCH : this.PRESET_KEY;
@@ -2439,7 +2321,6 @@ const texturePath = ageStage === 'Adult'
         }
     },
 
-    // Check admin status using auth/status endpoint
     async checkAdminStatus(discordId) {
         try {
             const response = await fetch(`${API_BASE_URL}/api/auth/status`, {
@@ -2459,7 +2340,6 @@ const texturePath = ageStage === 'Adult'
         }
     },
 
-    // Get CSRF token
     async getCsrfToken() {
         try {
             const response = await fetch(`${API_BASE_URL}/api/csrf-token`, {
@@ -2469,59 +2349,33 @@ const texturePath = ageStage === 'Adult'
             return data.token || data.csrfToken;
         } catch (error) {
             console.error('Error getting CSRF token:', error);
-            // Return a placeholder if CSRF token fails - not critical for this app
             return 'csrf-placeholder';
         }
     },
 
-    // Apply skin functionality
     async applySkin() {
         let progressModal = null;
         
         try {
-            // Show server selection modal first
             const server = await this.showServerSelectionModal();
-            if (!server) return; // User cancelled
+            if (!server) return; 
 
-            // Show initial progress modal
             progressModal = this.showProgressModal('Applying Skin', '🔄 Checking login status...');
             
-            // Get Discord ID from authUtils
-
-/* === ОТКЛЮЧАЕМ ПРОВЕРКУ АВТОРИЗАЦИИ ===
-const userData = await window.authUtils.getCurrentUser();
-if (!userData || !userData.id) {
-    progressModal.close();
-    await this.showModal(
-        'Error',
-        'Please log in with Discord first.',
-        'error',
-        { confirmText: 'OK' }
-    );
-    return;
-}
-======================================= */
-
-// Подсовываем фейковый ID, чтобы скрипт пропустил нас дальше:
 const discordId = "local_offline_user";
 console.log('Applying skin for user:', discordId);
             
-            // Update progress
             progressModal.update('Applying Skin', '🔄 Checking permissions...');
             
-            // Get fresh CSRF token
             const csrfToken = await this.getCsrfToken();
             
-            // Check if user is admin
             const isAdmin = await this.checkAdminStatus(discordId);
             console.log('User admin status:', isAdmin);
             
-            // Check cooldown if not admin
             if (!isAdmin) {
                 progressModal.update('Applying Skin', '🔄 Checking cooldown...');
                 console.log('User is not admin, checking cooldown...');
                 
-                // Get cooldown reduction for user's roles
                 const reductionResponse = await fetch(`${API_BASE_URL}/api/skin-cooldown-reduction`, {
                     headers: {
                         'Content-Type': 'application/json'
@@ -2543,11 +2397,9 @@ console.log('Applying skin for user:', discordId);
                     cooldownReduction = 0;
                 }
                 
-                // Base cooldown is 30 minutes (1800000ms)
                 const baseCooldown = 1800000;
                 const adjustedCooldown = Math.max(60000, baseCooldown * (1 - cooldownReduction));
                 
-                // Use user-specific cooldown key
                 const cooldownKey = `lastSkinApplied_${discordId}`;
                 const lastApplied = localStorage.getItem(cooldownKey);
                 
@@ -2570,7 +2422,6 @@ console.log('Applying skin for user:', discordId);
                             timeMessage = `${secondsLeft} second${secondsLeft > 1 ? 's' : ''}`;
                         }
                         
-                        // Check if user has Patreon role
                         let hasPatreon = false;
                         try {
                             const authResponse = await fetch(`${API_BASE_URL}/api/auth/status`, {
@@ -2587,7 +2438,6 @@ console.log('Applying skin for user:', discordId);
                         
                         progressModal.close();
                         
-                        // Show cooldown modal with Patreon promotion if not Patreon
                         if (!hasPatreon) {
                             await this.showCooldownModalWithPatreon(timeMessage);
                         } else {
@@ -2603,10 +2453,8 @@ console.log('Applying skin for user:', discordId);
                 }
             }
 
-            // Update progress - checking Steam ID
             progressModal.update('Applying Skin', '🔄 Verifying Steam ID...');
             
-            // Get SteamID
             const steamidResponse = await fetch(`${API_BASE_URL}/api/get-steamid`, {
                 method: 'GET',
                 headers: {
@@ -2634,7 +2482,6 @@ console.log('Applying skin for user:', discordId);
 
             const steamid = steamidData.steamid;
 
-            // Update progress - checking if online
             progressModal.update('Applying Skin', '🎮 Checking if you are online on the server...');
 
             const glitchSkin = this.isGlitchSkinMode();
@@ -2648,24 +2495,19 @@ console.log('Applying skin for user:', discordId);
                 eyesColor: this.getSkinColorRgb('eyesColor')
             };
 
-            // Get selected gender
             const genderInput = document.querySelector('input[name="gender"]:checked');
             const gender = genderInput ? genderInput.value : 'male';
             const genderParam = gender === 'female' ? 'f' : 'm';
 
-            // Get skin parameters
             const skinVariation = parseFloat(document.getElementById('pattern-variation').value);
             const pattern = parseInt(document.getElementById('pattern').value);
 
-            // Validate required data
             if (!discordId) {
                 throw new Error('Discord ID is not available. Please make sure you are logged in.');
             }
 
-            // Update progress - applying skin
             progressModal.update('Applying Skin', '🎨 Sending skin to game server...');
 
-            // Send to server with individual parameters (matching api-old.js format)
             const response = await fetch(`${API_BASE_URL}/api/apply-skin`, {
                 method: 'POST',
                 headers: {
@@ -2696,7 +2538,6 @@ console.log('Applying skin for user:', discordId);
                     error: errorData
                 });
                 
-                // Check for specific error conditions
                 if (response.status === 401) {
                     throw new Error('Please log in to apply skins');
                 } else if (response.status === 403) {
@@ -2719,11 +2560,9 @@ console.log('Applying skin for user:', discordId);
 
             const result = await response.json();
 
-            // Close progress modal before showing result
             progressModal.close();
 
             if (result.success) {
-                // Update cooldown timestamp if not admin
                 if (!isAdmin) {
                     const cooldownKey = `lastSkinApplied_${discordId}`;
                     localStorage.setItem(cooldownKey, Date.now().toString());
@@ -2742,12 +2581,10 @@ console.log('Applying skin for user:', discordId);
         } catch (error) {
             console.error('Error applying skin:', error);
             
-            // Close progress modal if still open
             if (progressModal) {
                 progressModal.close();
             }
             
-            // Show more detailed error message
             let errorMessage = error.message;
             let errorTitle = 'Error';
             
@@ -2783,16 +2620,11 @@ console.log('Applying skin for user:', discordId);
         return String(el.dataset.active || '') === 'true';
     },
 
-    /** Sub / Apex / Elder — full glitch editor (same as `data-can-glitch` on `#glitch-skin-mode`). */
     canSaveFullGlitchPreset() {
         const m = document.getElementById('glitch-skin-mode');
         return !!(m && m.dataset.canGlitch === 'true');
     },
 
-    /**
-     * Applies saved glitch float + hex fields and enters glitch UI (Sub+ only).
-     * @returns {boolean}
-     */
     _applyFullGlitchEditorFromPreset(preset) {
         if (!preset || !preset.glitchColors || typeof preset.glitchColors !== 'object') return false;
         const marker = document.getElementById('glitch-skin-mode');
@@ -2892,8 +2724,6 @@ console.log('Applying skin for user:', discordId);
             const rgb = this.getSkinColorRgb(id);
             const hexEl = document.getElementById(id);
             if (!hexEl) return;
-            // Keep hidden `#RRGGBB` in sync for export / presets only. Do not dispatch `input`:
-            // that runs syncHexPickerToGlitchFloats and overwrites float fields with 0–255 from hex.
             hexEl.value = this.floatRgbToHexForPicker(rgb.r, rgb.g, rgb.b);
         });
     },
@@ -2917,7 +2747,6 @@ console.log('Applying skin for user:', discordId);
         });
     },
 
-    // Helper function to convert hex to RGB
     hexToRgb(hex) {
         const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
         return result ? {
@@ -2927,7 +2756,6 @@ console.log('Applying skin for user:', discordId);
         } : null;
     },
 
-    // Generate a skin code from current settings
     generateSkinCode() {
         if (this.isGlitchSkinMode()) {
             this.syncGlitchFloatsToHexPickers();
@@ -2963,10 +2791,8 @@ console.log('Applying skin for user:', discordId);
         return code;
     },
 
-    // Load settings from a skin code
     loadSkinCode(code) {
         try {
-            // Decode base64 and parse JSON
             const jsonStr = atob(code);
             const settings = JSON.parse(jsonStr);
 
@@ -2977,14 +2803,12 @@ console.log('Applying skin for user:', discordId);
                 typeof settings.glitchColors === 'object';
             const canGlitchImport = !!(marker && marker.dataset.canGlitch === 'true');
 
-            // Apply model
             const modelSelect = document.getElementById('modelSelect');
             if (modelSelect && settings.model) {
                 modelSelect.value = settings.model;
                 this.loadModel(settings.model);
             }
 
-            // Apply pattern and variation
             const patternVariation = document.getElementById('pattern-variation');
             const pattern = document.getElementById('pattern');
             const genderInput = document.querySelector(`input[name="gender"][value="${settings.gender}"]`);
@@ -3064,7 +2888,6 @@ console.log('Applying skin for user:', discordId);
         }
     },
 
-    // Initialize event listeners
     initializeEventListeners() {
         if (this._listenersAbortController) {
             this._listenersAbortController.abort();
@@ -3079,7 +2902,6 @@ console.log('Applying skin for user:', discordId);
         const savePresetBtn = document.getElementById('savePresetBtn');
         const applyBtn = document.getElementById('applyBtn');
         
-        // Initialize color pickers with debounced update
         const colorPickers = {
             maleDisplayColor: document.getElementById('maleDisplayColor'),
             markingsColor: document.getElementById('markingsColor'),
@@ -3092,9 +2914,6 @@ console.log('Applying skin for user:', discordId);
         
         window.colorPickers = colorPickers;
 
-        /**
-         * Glitch float inputs — debounce while typing; apply immediately on change/blur.
-         */
         const onGlitchAxisDocument = (e) => {
             const t = e.target;
             if (!t || t.tagName !== 'INPUT') return;
@@ -3199,7 +3018,6 @@ console.log('Applying skin for user:', discordId);
         }
         
         if (patternSelect) {
-            // Use 'input' event for real-time updates while dragging
             patternSelect.addEventListener('input', () => {
                 console.log('Pattern changed to:', patternSelect.value);
                 this.updateModelColors();
@@ -3233,7 +3051,6 @@ console.log('Applying skin for user:', discordId);
             }, { signal: ac.signal });
         }
 
-        // Add load preset functionality
         const loadPresetBtn = document.getElementById('loadPresetBtn');
         if (loadPresetBtn) {
             loadPresetBtn.addEventListener('click', () => {
@@ -3251,7 +3068,6 @@ console.log('Applying skin for user:', discordId);
             }, { signal: ac.signal });
         }
 
-        // Add delete preset functionality
         const deletePresetBtn = document.getElementById('deletePresetBtn');
         if (deletePresetBtn) {
             deletePresetBtn.addEventListener('click', () => {
@@ -3277,7 +3093,6 @@ console.log('Applying skin for user:', discordId);
 
         this._wirePresetSelectMutex(ac.signal);
 
-        // Add gender radio button listeners for debugging
         const genderRadios = document.querySelectorAll('input[name="gender"]');
         genderRadios.forEach(radio => {
             radio.addEventListener('change', function() {
@@ -3295,7 +3110,6 @@ console.log('Applying skin for user:', discordId);
                     gender: document.querySelector('input[name="gender"]:checked')?.value || 'male'
                 };
 
-                // Collect all colors
                 Object.entries(colorPickers).forEach(([key, picker]) => {
                     if (picker) {
                         skinData.colors[key] = picker.value;
@@ -3303,13 +3117,12 @@ console.log('Applying skin for user:', discordId);
                 });
                 
                 try {
-                    // Save skin locally for now (server save not implemented yet)
                     const savedSkins = JSON.parse(localStorage.getItem('savedSkins') || '[]');
                     savedSkins.push({
                         ...skinData,
                         savedAt: new Date().toISOString()
                     });
-                    localStorage.setItem('savedSkins', JSON.stringify(savedSkins.slice(-10))); // Keep last 10
+                    localStorage.setItem('savedSkins', JSON.stringify(savedSkins.slice(-10))); 
                     
                     await this.showModal(
                         'Success',
@@ -3329,7 +3142,6 @@ console.log('Applying skin for user:', discordId);
             }, { signal: ac.signal });
         }
 
-        // Add skin code functionality
         const getCodeBtn = document.getElementById('getCodeBtn');
         const loadCodeBtn = document.getElementById('loadCodeBtn');
 
@@ -3394,7 +3206,6 @@ console.log('Applying skin for user:', discordId);
             }, { signal: ac.signal });
         }
 
-        // Add debug button listener
         const debugBtn = document.getElementById('debugBtn');
         if (debugBtn) {
             debugBtn.addEventListener('click', () => {
@@ -3402,7 +3213,6 @@ console.log('Applying skin for user:', discordId);
             }, { signal: ac.signal });
         }
 
-        // Add apply skin functionality
         if (applyBtn) {
             applyBtn.addEventListener('click', async () => {
                 const button = applyBtn;
@@ -3420,7 +3230,6 @@ console.log('Applying skin for user:', discordId);
         }
     },
 
-    // Update the updatePresetsDropdown function to be part of SkinCreator
     updatePresetsDropdown() {
         const normal = JSON.parse(localStorage.getItem(this.PRESET_KEY)) || {};
         const glitch = JSON.parse(localStorage.getItem(this.PRESET_KEY_GLITCH)) || {};
@@ -3459,19 +3268,11 @@ console.log('Applying skin for user:', discordId);
     }
 };
 
-// Global initialization function for the skin creator
 window.initializeSkinCreator = function() {
     console.log('Initializing Skin Creator...');
-    
-    // Clean up any existing instance
     SkinCreator.cleanup();
-    
-    // Initialize everything
     SkinCreator.init();
     SkinCreator.initializeEventListeners();
-    
-    // Initialize presets dropdown
     SkinCreator.updatePresetsDropdown();
-    
     console.log('Skin Creator initialized successfully');
 };
