@@ -1,588 +1,3278 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>The Isle - Creator & NERF Map</title>
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Changa+One&family=Montserrat:wght@400;700;800&display=swap" rel="stylesheet">
-    
-    <style>
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #0d120e; font-family: 'Montserrat', sans-serif; }
-        input[type="range"] { width: 100%; accent-color: #ffb300; cursor: pointer; height: 6px; border-radius: 3px; }
+// Skin Creator functionality
+// API Base URL - backend server (auto-detect based on hostname)
+function getApiBaseUrl() {
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        const port = window.location.port;
+        if (port === '3003') return 'http://localhost:5003';  // nerfofficial
+        if (port === '3002') return 'http://localhost:5002';  // nerfdev
+        if (port === '3001') return 'http://localhost:5001';  // old demo
+        if (port === '3000') return 'http://localhost:7778';  // demo/localhost
+        return 'http://localhost:5000';
+    } else if (window.location.hostname.includes('nerfdev.org')) {
+        return 'https://api.nerfdev.org';
+    } else if (window.location.hostname.includes('nerfofficial.org')) {
+        return 'https://api.nerfofficial.org';
+    }
+    return 'https://api.nerfofficial.org';
+}
+const API_BASE_URL = getApiBaseUrl();
+
+/** Convert a single sRGB channel (0–1 as stored in CSS/hex bytes) to linear for PBR albedo. */
+function skinSrgbChannelToLinear(s) {
+    const x = Number(s);
+    if (!Number.isFinite(x)) return 0;
+    if (x <= 0.04045) return x / 12.92;
+    return Math.pow((x + 0.055) / 1.055, 2.4);
+}
+
+/** Hard cap for glitch linear RGB channels (matches backend / saved payloads). */
+const GLITCH_SKIN_LINEAR_MIN = -1000000;
+const GLITCH_SKIN_LINEAR_MAX = 1000000;
+
+function clampGlitchLinearChannel(v) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return 0;
+    return Math.min(GLITCH_SKIN_LINEAR_MAX, Math.max(GLITCH_SKIN_LINEAR_MIN, n));
+}
+
+/** Parse RGB field text (supports `0,88` European decimals). */
+function skinParseRgbFieldNumber(raw) {
+    if (raw == null || raw === '') return NaN;
+    const s = String(raw).trim().replace(/,/g, '.');
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : NaN;
+}
+
+/** Raw finite vec3 for manifest body slots — matches Oasis setRGB(r,g,b) on skin uniforms. */
+function skinRgbToOasisVec3(r, g, b) {
+    const R = Number(r),
+        G = Number(g),
+        B = Number(b);
+    return new THREE.Vector3(
+        Number.isFinite(R) ? R : 0,
+        Number.isFinite(G) ? G : 0,
+        Number.isFinite(B) ? B : 0
+    );
+}
+
+/** Preview / hex folding: map any float channel to 0–255 (wrap), same as legacy `*255` mod. */
+function glitchChannelToDisplayByte(v) {
+    const x = Number(v);
+    if (!Number.isFinite(x)) return 0;
+    return ((Math.round(x * 255) % 256) + 256) % 256;
+}
+
+/** Map arbitrary float channels to 0–255 for canvas preview (wrapping). */
+function glitchFloatToPreviewByte(v) {
+    return glitchChannelToDisplayByte(v);
+}
+
+/** All pigment color input ids (order matches UI). */
+const SKIN_COLOR_INPUT_IDS = [
+    'maleDisplayColor',
+    'markingsColor',
+    'bodyColor',
+    'flankColor',
+    'underbellyColor',
+    'detail1Color',
+    'eyesColor'
+];
+
+/** Oasis-style rig — used only in glitch mode (NoToneMapping preserves float tint separation). */
+const OASIS_SKIN_VIEWER_AMBIENT_COLOR = 0xffffff;
+const OASIS_SKIN_VIEWER_AMBIENT_INTENSITY = 0.2;
+const OASIS_SKIN_VIEWER_KEY_COLOR = 0xfff4a0;
+const OASIS_SKIN_VIEWER_KEY_INTENSITY = 2.35;
+const OASIS_SKIN_VIEWER_KEY_POSITION = { x: 0, y: 10, z: 2 };
+
+/** Normal skins — UE-ish outdoor read: higher fill + exposure so dark pigments stay vivid, not muddy. */
+const UE5_SKIN_VIEWER_AMBIENT_COLOR = 0xf2f4fb;
+const UE5_SKIN_VIEWER_AMBIENT_INTENSITY = 0.11;
+const UE5_SKIN_VIEWER_HEMI_SKY = 0xd4e4ff;
+const UE5_SKIN_VIEWER_HEMI_GROUND = 0x5c4a42;
+const UE5_SKIN_VIEWER_HEMI_INTENSITY = 0.5;
+const UE5_SKIN_VIEWER_SUN_COLOR = 0xfffbef;
+const UE5_SKIN_VIEWER_SUN_INTENSITY = 1.72;
+const UE5_SKIN_VIEWER_SUN_POSITION = { x: 4.2, y: 11, z: 4.5 };
+const UE5_SKIN_TONE_MAPPING_EXPOSURE = 1.06;
+
+/** Skin code / preset fields kept for backward compatibility; lighting is fixed. */
+const OASIS_SKIN_EXPORT_SUN_AZIMUTH = '0';
+const OASIS_SKIN_EXPORT_SUN_INTENSITY = '2';
+
+/** Pixel ratio cap for sharper canvas on high-DPI displays (balance vs GPU cost). */
+const SKIN_VIEWER_MAX_PIXEL_RATIO = 3;
+/** Anisotropic filtering cap — improves tangent detail when the surface is viewed at a grazing angle. */
+const SKIN_VIEWER_TEXTURE_ANISOTROPY_CAP = 16;
+
+/** Known GLB clip names (order used when sorting clips for the dropdown). */
+const SKIN_CREATOR_ANIMATION_LABELS = [
+    'Idle', 'Sniff', 'Trot', 'Broadcast', 'Attract', 'Threaten', 'Danger'
+];
+
+function sortClipsByKnownAnimationOrder(clips) {
+    const used = new Set();
+    const ordered = [];
+    for (const label of SKIN_CREATOR_ANIMATION_LABELS) {
+        const want = label.toLowerCase();
+        const found = clips.find((c) => (c.name || '').trim().toLowerCase() === want);
+        if (found) {
+            ordered.push(found);
+            used.add(found);
+        }
+    }
+    clips.forEach((c) => {
+        if (!used.has(c)) {
+            ordered.push(c);
+        }
+    });
+    return ordered;
+}
+
+function labelForAnimationClip(clip, fallbackIndex) {
+    const raw = (clip.name || '').trim();
+    if (!raw) {
+        return SKIN_CREATOR_ANIMATION_LABELS[fallbackIndex] || `Clip ${fallbackIndex + 1}`;
+    }
+    const lower = raw.toLowerCase();
+    const canonical = SKIN_CREATOR_ANIMATION_LABELS.find((l) => l.toLowerCase() === lower);
+    return canonical || raw;
+}
+
+function disposeSingleMaterial(material) {
+    if (!material) return;
+    ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'lightMap', 'bumpMap', 'displacementMap', 'specularMap'].forEach((k) => {
+        const t = material[k];
+        if (t && typeof t.dispose === 'function') t.dispose();
+    });
+    if (typeof material.dispose === 'function') material.dispose();
+}
+
+/** Linear RGB from manifest `Paramters.Colors` entry (matches Oasis `Z(B.TeethColor)`). */
+function manifestLinearColorVec3(manifest, key, fallbackRgb) {
+    const fb = fallbackRgb || [1, 1, 1];
+    const cols =
+        manifest &&
+        manifest.BodyMaterial &&
+        manifest.BodyMaterial.Paramters &&
+        manifest.BodyMaterial.Paramters.Colors;
+    const c = cols && cols[key];
+    if (!c || typeof c.R !== 'number') {
+        return new THREE.Vector3(fb[0], fb[1], fb[2]);
+    }
+    return new THREE.Vector3(c.R, c.G, c.B);
+}
+
+function disposeThreeObjectTree(root) {
+    if (!root) return;
+    root.traverse((object) => {
+        if (object.geometry) object.geometry.dispose();
+        if (object.material) {
+            if (Array.isArray(object.material)) {
+                object.material.forEach((material) => {
+                    disposeSingleMaterial(material);
+                });
+            } else {
+                disposeSingleMaterial(object.material);
+            }
+        }
+    });
+}
+
+/** Oasis / tio.gg skin shader — multiplicative masks, base CMY under pattern, albedo last. */
+const SKIN_SHADER_PREAMBLE = `
+uniform sampler2D uSkinBaseMask;
+uniform sampler2D uSkinPattern;
+uniform sampler2D uSkinAlbedo;
+uniform sampler2D uSkinOrigMap;
+uniform vec3 uTeethColor;
+uniform vec3 uMouthColor;
+uniform vec3 uClawColor;
+uniform vec3 uColMaleDisplay;
+uniform vec3 uColUnderbelly;
+uniform vec3 uColFlank;
+uniform vec3 uColBody;
+uniform vec3 uColMarkings;
+uniform vec3 uColDetail;
+uniform float uSkinPatternNeutralGray;
+uniform float uSkinManifestDiffuseGain;
+uniform float uSkinPreviewSaturation;
+`;
+
+/** Glitch preview — unchanged from legacy Oasis shader tuning (paired with NoToneMapping). */
+const SKIN_GLITCH_PATTERN_NEUTRAL_GRAY = 0.88;
+const SKIN_GLITCH_MANIFEST_DIFFUSE_GAIN = 0.56;
+const SKIN_GLITCH_PREVIEW_SATURATION = 1.0;
+
+/** Normal skins — lift unmasked pattern base slightly + more diffuse so dark slots read saturated. */
+const SKIN_NORMAL_PATTERN_NEUTRAL_GRAY = 0.72;
+const SKIN_NORMAL_MANIFEST_DIFFUSE_GAIN = 0.68;
+const SKIN_NORMAL_PREVIEW_SATURATION = 1.18;
+
+const SKIN_MAP_FRAGMENT_REPLACE = `
+#ifdef USE_MAP
+	vec3 bm = texture2D( uSkinBaseMask, vUv ).rgb;
+	vec3 pm = texture2D( uSkinPattern, vUv ).rgb;
+	vec3 alb = texture2D( uSkinAlbedo, vUv ).rgb;
+
+	float bmR = bm.r * (1.0 - bm.g) * (1.0 - bm.b);
+	float bmG = bm.g * (1.0 - bm.r) * (1.0 - bm.b);
+	float bmB = bm.b * (1.0 - bm.r) * (1.0 - bm.g);
+	float bmC = bm.g * bm.b * (1.0 - bm.r);
+	float bmM = bm.r * bm.b * (1.0 - bm.g);
+	float bmY = bm.r * bm.g * (1.0 - bm.b);
+
+	// Neutral base before mask tints; separate values for normal (UE preview) vs glitch in JS.
+	vec3 color = vec3(uSkinPatternNeutralGray);
+	color = mix(color, uColBody, bmC);
+	color = mix(color, uColMarkings, bmM);
+	color = mix(color, uColDetail, bmY);
+
+	float fR = pm.r * (1.0 - pm.g) * (1.0 - pm.b);
+	float fG = pm.g * (1.0 - pm.r) * (1.0 - pm.b);
+	float fB = pm.b * (1.0 - pm.r) * (1.0 - pm.g);
+	float fC = pm.g * pm.b * (1.0 - pm.r);
+	float fM = pm.r * pm.b * (1.0 - pm.g);
+	float fY = pm.r * pm.g * (1.0 - pm.b);
+
+	color = mix(color, uColMaleDisplay, fR);
+	color = mix(color, uColUnderbelly, fG);
+	color = mix(color, uColFlank, fB);
+	color = mix(color, uColBody, fC);
+	color = mix(color, uColMarkings, fM);
+	color = mix(color, uColDetail, fY);
+
+	color = mix(color, uTeethColor, bmR);
+	color = mix(color, uMouthColor, bmG);
+	color = mix(color, uClawColor, bmB);
+
+	// Normal mode: nudge chroma so deep browns/reds don’t collapse to gray under ACES + fill (glitch = 1.0).
+	float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+	color = mix(vec3(luma), color, uSkinPreviewSaturation);
+
+	float origA = texture2D( uSkinOrigMap, vUv ).a;
+	diffuseColor.rgb = color * alb * uSkinManifestDiffuseGain;
+	diffuseColor.a = origA;
+#endif
+`;
+
+function resolvePatternEntryFromManifest(manifest, ageStage, patternIndex) {
+    const tex = manifest && manifest.BodyMaterial && manifest.BodyMaterial.Textures;
+    if (!tex) return null;
+    if (ageStage === 'Adult') {
+        const arr = tex.AdultPatterns || [];
+        if (!arr.length) return null;
+        const n = parseInt(patternIndex, 10);
+        const i = Number.isFinite(n) ? Math.min(Math.max(0, n), arr.length - 1) : 0;
+        return arr[i];
+    }
+    if (ageStage === 'Juvenile') return tex.JuvenilePattern || null;
+    return tex.HatchlingPattern || null;
+}
+
+window.SkinCreator = window.SkinCreator || {
+    scene: null,
+    camera: null,
+    renderer: null,
+    controls: null,
+    model: null,
+    modelViewer: null,
+    isInitialized: false,
+    isRotating: true,
+    PRESET_KEY: 'dino_skin_presets',
+    PRESET_KEY_GLITCH: 'dino_skin_presets_glitch',
+    animationId: null,
+    _modelLoadToken: 0,
+    _updateColorsToken: 0,
+    _currentSkinManifest: null,
+    _manifestSkinTextureKey: null,
+    _manifestSharedColorUniforms: null,
+    _manifestSharedPresentationUniforms: null,
+    _manifestColorRefreshRaf: null,
+    _gltfBaseMapSource: null,
+    _whiteFallbackMap: null,
+    initRetries: 0,
+    maxInitRetries: 10,
+    sunLight: null,
+    ambientLight: null,
+    hemisphereLight: null,
+    groundMesh: null,
+    mixer: null,
+    clock: null,
+    gltfAnimationClips: [],
+
+    init() {
+        if (this.isInitialized && this.scene && this.renderer) {
+            return;
+        }
+
+        if (typeof THREE === 'undefined') {
+            this.initRetries++;
+            if (this.initRetries < this.maxInitRetries) {
+                setTimeout(() => this.init(), 300);
+            }
+            return;
+        }
+
+        if (!THREE.OrbitControls || !THREE.OBJLoader || !THREE.GLTFLoader) {
+            this.initRetries++;
+            if (this.initRetries < this.maxInitRetries) {
+                setTimeout(() => this.init(), 300);
+            }
+            return;
+        }
+
+        this.modelViewer = document.getElementById('modelViewer');
+        if (!this.modelViewer) {
+            this.initRetries++;
+            if (this.initRetries < this.maxInitRetries) {
+                setTimeout(() => this.init(), 300);
+            }
+            return;
+        }
+
+        this.modelViewer.querySelectorAll('canvas').forEach((c) => c.remove());
+        this.initRetries = 0;
+
+        this.scene = new THREE.Scene();
+
+        const w = this.modelViewer.offsetWidth || this.modelViewer.clientWidth || 800;
+        const h = this.modelViewer.offsetHeight || this.modelViewer.clientHeight || 700;
+
+        this.camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 1000);
+        this.camera.position.z = 3;
+
+        this.renderer = new THREE.WebGLRenderer({
+            antialias: true,
+            alpha: true,
+            powerPreference: 'high-performance'
+        });
+        this.renderer.setClearColor(0x000000, 0);
+        if (THREE.sRGBEncoding !== undefined) {
+            this.renderer.outputEncoding = THREE.sRGBEncoding;
+        }
+        if (THREE.NoToneMapping !== undefined) {
+            this.renderer.toneMapping = THREE.NoToneMapping;
+        }
+        if (this.renderer.toneMappingExposure !== undefined) {
+            this.renderer.toneMappingExposure = 1;
+        }
+        if (this.renderer.outputColorSpace !== undefined && THREE.SRGBColorSpace !== undefined) {
+            this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+        }
+        this.renderer.setSize(w, h);
+        this.renderer.setPixelRatio(
+            Math.min(window.devicePixelRatio || 1, SKIN_VIEWER_MAX_PIXEL_RATIO)
+        );
+        this.renderer.domElement.style.width = '100%';
+        this.renderer.domElement.style.height = '100%';
+        this.modelViewer.appendChild(this.renderer.domElement);
+
+        setTimeout(() => {
+            this.onWindowResize();
+        }, 100);
         
-        #modelSelect { width: 100%; background: rgba(0,0,0,0.4); color: #fff; border: 1px solid rgba(255,255,255,0.1); padding: 12px; border-radius: 6px; font-size: 1rem; cursor: pointer; outline: none; backdrop-filter: blur(4px); }
-        #modelSelect option { background: #131a14; color: #fff; padding: 10px; }
-
-        .top-nav-container { 
-            position: absolute; top: 15px; left: 20px; z-index: 9999; display: flex; 
-            background: linear-gradient(135deg, rgba(30, 40, 30, 0.75) 0%, rgba(15, 20, 15, 0.85) 100%);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-            border-radius: 8px; overflow: hidden;
-        }
-        .custom-nav-btn { background: transparent; color: #aaa; border: none; padding: 12px 26px; cursor: pointer; font-weight: bold; text-transform: uppercase; font-size: 0.85rem; transition: all 0.2s ease; outline: none; font-family: 'Montserrat', sans-serif;}
-        .custom-nav-btn:hover { color: #fff; background: rgba(255,255,255,0.05); }
-        .custom-nav-btn.active { background: #ffb300; color: #000; }
-
-        #gameMapWindow { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; display: none; background: #080b08; }
-        #leafletMapContainer { width: 100%; height: 100%; background: #080b08; }
+        this._boundResize = this.onWindowResize.bind(this);
+        window.addEventListener('resize', this._boundResize);
         
-        .nerf-sidebar { 
-            position: absolute; top: 75px; left: 20px; width: 340px; 
-            background: linear-gradient(135deg, rgba(30, 40, 30, 0.85) 0%, rgba(15, 20, 15, 0.95) 100%); 
-            border: 1px solid rgba(255, 255, 255, 0.1); 
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-            border-radius: 12px; padding: 25px 20px; z-index: 1000; box-sizing: border-box; 
-            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-            color: #fff; max-height: calc(100vh - 100px); overflow-y: auto; display: flex; flex-direction: column; gap: 20px;
-        }
-        .nerf-sidebar::-webkit-scrollbar { width: 6px; }
-        .nerf-sidebar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 3px; }
+        this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+        this.controls.enableDamping = true;
+        this.controls.dampingFactor = 0.05;
+        this.controls.enableZoom = true;
+        this.controls.autoRotate = this.isRotating;
+        this.controls.autoRotateSpeed = 1.5;
+
+        this._installLighting();
+
+        this.clock = new THREE.Clock();
+
+        this.loadModel('Allosaurus');
         
-        .nerf-section-title { font-size: 0.8rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 10px 0; color: #fff; }
-        .nerf-input-row { display: flex; gap: 10px; }
-        .nerf-input { flex: 1; background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255,255,255,0.1); padding: 10px; border-radius: 6px; color: #fff; outline: none; font-family: 'Montserrat', sans-serif; font-size: 0.9rem; }
-        .nerf-btn { background: rgba(255, 255, 255, 0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: all 0.2s; backdrop-filter: blur(4px); }
-        .nerf-btn:hover { background: rgba(255, 255, 255, 0.2); border-color: rgba(255, 255, 255, 0.4); }
-        .nerf-hint { font-size: 0.75rem; color: rgba(255,255,255,0.5); margin-top: 5px; line-height: 1.4; }
+        this.animate();
+        this.isInitialized = true;
+    },
 
-        .nerf-pill-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-        .nerf-pill { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); color: #aaa; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 800; cursor: pointer; transition: all 0.2s; font-family: 'Montserrat', sans-serif; text-transform: capitalize; backdrop-filter: blur(4px); }
-        
-        .nerf-pill[data-target="regions"].active { border-color: #4a5c40; color: #a3c9a6; background: rgba(74, 92, 64, 0.4); }
-        .nerf-pill[data-target="outposts"].active { border-color: #6a502c; color: #e3bc84; background: rgba(106, 80, 44, 0.4); }
-        .nerf-pill[data-target="landmarks"].active { border-color: #5c385a; color: #e5b0e8; background: rgba(92, 56, 90, 0.4); }
-        .nerf-pill[data-target="water"].active { border-color: #2b4b52; color: #addcf0; background: rgba(43, 75, 82, 0.4); }
-        
-        .nerf-pill[data-target="patrol"].active { border-color: #fcb5b5; color: #fcb5b5; background: rgba(59, 35, 37, 0.8); }
-        .nerf-pill[data-target="migration"].active { border-color: #c3d6fc; color: #c3d6fc; background: rgba(36, 49, 66, 0.8); }
-        .nerf-pill[data-target="sanctuary"].active { border-color: #e2f2ab; color: #e2f2ab; background: rgba(54, 66, 35, 0.8); }
-        .nerf-pill[data-target="spawns"].active { border-color: #fedfa9; color: #fedfa9; background: rgba(68, 53, 33, 0.8); }
+    cleanup() {
+        this._modelLoadToken = (this._modelLoadToken || 0) + 1;
 
-        .map-style-btn { width: 100%; background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; text-align: left; transition: all 0.2s; backdrop-filter: blur(4px); }
-        .map-style-btn.active { border-color: #88aaff; color: #88aaff; background: rgba(136, 170, 255, 0.15); }
-
-        .leaflet-layer-grayscale { filter: grayscale(100%) brightness(0.7); transition: filter 0.5s ease; }
-
-        .nerf-map-label { background: rgba(13, 26, 15, 0.85); border: 1px solid rgba(255,255,255,0.2); color: #ccc; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: bold; white-space: nowrap; cursor: pointer; transition: all 0.2s; font-family: 'Montserrat', sans-serif;}
-        .nerf-map-label:hover { border-color: #ffb300; color: #ffb300; z-index: 1000 !important; }
-
-        .labels-list-container { border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px; display: flex; flex-direction: column; gap: 8px; max-height: 250px; overflow-y: auto; }
-        .labels-list-container::-webkit-scrollbar { width: 4px; }
-        .labels-list-container::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 2px; }
-        .sidebar-label-btn { background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255,255,255,0.05); color: #ccc; padding: 10px 15px; border-radius: 6px; text-align: left; font-family: 'Montserrat', sans-serif; font-size: 0.85rem; font-weight: bold; cursor: pointer; transition: all 0.2s; }
-        .sidebar-label-btn:hover { background: rgba(255, 255, 255, 0.1); color: #fff; border-color: #ffb300; }
-        .hidden { display: none !important; }
-
-        /* БОЛЬШАЯ ТОЧКА МАРКЕРА */
-        .player-marker-pulse { 
-            position: relative; width: 24px; height: 24px; 
-            background: #d84343; border-radius: 50%; pointer-events: none; 
-            border: 2px solid rgba(255,255,255,0.8); 
-            box-shadow: 0 0 10px rgba(0,0,0,0.6); 
-            box-sizing: border-box;
-        }
-        .player-marker-pulse::before, .player-marker-pulse::after { 
-            content: ''; position: absolute; top: -3px; left: -3px; right: -3px; bottom: -3px; 
-            border: 2px solid #d84343; border-radius: 50%; 
-            animation: pulse-ring 2.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite; 
-        }
-        .player-marker-pulse::after { animation-delay: 1.25s; }
-        @keyframes pulse-ring { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(3.5); opacity: 0; } }
-
-        #rightConfigPanel {
-            width: 400px; 
-            background: linear-gradient(135deg, rgba(20, 30, 20, 0.85) 0%, rgba(10, 15, 10, 0.95) 100%);
-            border-left: 1px solid rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-            padding: 30px 25px; display: flex; flex-direction: column; gap: 25px; box-sizing: border-box; overflow-y: auto; z-index: 20;
+        if (this.animationId) {
+            cancelAnimationFrame(this.animationId);
+            this.animationId = null;
         }
 
-        #editorControlsBlock {
-            position: relative; z-index: 15; display: flex; flex-direction: column; align-items: center; gap: 12px; 
-            background: linear-gradient(135deg, rgba(30, 40, 30, 0.75) 0%, rgba(15, 20, 15, 0.85) 100%);
-            padding: 15px 25px; border-radius: 12px; 
-            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+        if (this._boundResize) {
+            window.removeEventListener('resize', this._boundResize);
+            this._boundResize = null;
         }
         
-        .color-row-glass {
-            display: flex; justify-content: space-between; align-items: center; 
-            background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);
-            backdrop-filter: blur(4px);
-        }
-
-        /* УЛУЧШЕННАЯ ПАНЕЛЬ КАЛИБРОВКИ ВОЗВРАЩАЕТСЯ */
-        #calibrationPanel {
-            position: absolute; top: 15px; right: 20px; z-index: 9999; 
-            background: linear-gradient(135deg, rgba(30, 40, 30, 0.85) 0%, rgba(15, 20, 15, 0.95) 100%);
-            border: 1px solid #ffb300; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-            padding: 20px; border-radius: 12px; color: #fff; width: 340px;
-            font-family: 'Montserrat', sans-serif; font-size: 0.85rem;
-        }
-        .calib-row { margin-bottom: 15px; }
-        .calib-label { display: flex; justify-content: space-between; margin-bottom: 5px; font-weight: bold; color: #ccc; }
-    </style>
-</head>
-<body>
-
-  <div style="display: flex; width: 100vw; height: 100vh; color: #fff; overflow: hidden; position: relative;">
-      
-      <div class="top-nav-container">
-          <button id="btnToggleCreator" class="custom-nav-btn active">Skin Creator</button>
-          <button id="btnToggleMap" class="custom-nav-btn">Map</button>
-      </div>
-
-      <div style="flex: 1; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 30px;">
-          
-          <div id="skinEditorWindow" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5;">
-              <div id="modelViewer" style="width: 100%; height: 100%;"></div>
-          </div>
-
-          <div id="gameMapWindow">
-              
-              <div id="calibrationPanel">
-                  <h3 style="margin: 0 0 5px 0; color: #ffb300; font-size: 1.1rem; text-transform: uppercase;">Micro Calibration Pro</h3>
-                  <p style="font-size: 0.75rem; color: #aaa; margin-bottom: 15px; line-height: 1.3;">Because the map image is slightly distorted, adjust sliders to fit your local area.</p>
-                  
-                  <div class="calib-row">
-                      <div class="calib-label"><span>Scale X (Left/Right stretch):</span> <span id="valScaleX" style="color:#ffb300;">0.828</span></div>
-                      <input type="range" id="slideScaleX" min="0.600" max="1.100" step="0.001" value="0.828" style="width: 100%;">
-                  </div>
-                  <div class="calib-row">
-                      <div class="calib-label"><span>Scale Y (Up/Down stretch):</span> <span id="valScaleY" style="color:#ffb300;">0.868</span></div>
-                      <input type="range" id="slideScaleY" min="0.600" max="1.100" step="0.001" value="0.868" style="width: 100%;">
-                  </div>
-                  <div class="calib-row">
-                      <div class="calib-label"><span>Shift Right (X px):</span> <span id="valOffsetX" style="color:#ffb300;">8.426</span></div>
-                      <input type="range" id="slideOffsetX" min="-50.000" max="50.000" step="0.001" value="8.426" style="width: 100%;">
-                  </div>
-                  <div class="calib-row" style="margin-bottom: 0;">
-                      <div class="calib-label"><span>Shift Up (Y px):</span> <span id="valOffsetY" style="color:#ffb300;">-10.330</span></div>
-                      <input type="range" id="slideOffsetY" min="-50.000" max="50.000" step="0.001" value="-10.330" style="width: 100%;">
-                  </div>
-              </div>
-
-              <div class="nerf-sidebar">
-                  <div>
-                      <p class="nerf-section-title">Paste coordinates</p>
-                      <div class="nerf-input-row">
-                          <input type="text" id="coordInput" class="nerf-input" placeholder="X, Y, Z or X, Y" autocomplete="off">
-                          <button id="btnFocusMap" class="nerf-btn">Focus</button>
-                      </div>
-                      <p class="nerf-hint">Paste X, Y, Z or X, Y.</p>
-                  </div>
-
-                  <div>
-                      <p class="nerf-section-title">Map style</p>
-                      <button id="btnToggleGrayscale" class="map-style-btn">Black & white: Off</button>
-                  </div>
-
-                  <div>
-                      <p class="nerf-section-title" style="margin-bottom: 12px;">Label categories</p>
-                      <div class="nerf-pill-grid" id="categoryToggles">
-                          <button class="nerf-pill active" data-target="regions">Regions</button>
-                          <button class="nerf-pill active" data-target="outposts">Outposts</button>
-                          <button class="nerf-pill active" data-target="landmarks">Landmarks</button>
-                          <button class="nerf-pill active" data-target="water">Lakes & rivers</button>
-                      </div>
-                  </div>
-
-                  <div>
-                      <p class="nerf-section-title" style="margin-bottom: 12px;">Zone overlays</p>
-                      <div class="nerf-pill-grid" id="overlayToggles">
-                          <button class="nerf-pill" data-target="patrol">Patrol</button>
-                          <button class="nerf-pill" data-target="migration">Migration</button>
-                          <button class="nerf-pill" data-target="sanctuary">Sanctuary</button>
-                          <button class="nerf-pill" data-target="spawns">Spawns</button>
-                      </div>
-                  </div>
-
-                  <div>
-                      <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 10px;">
-                          <p class="nerf-section-title" style="margin: 0;">Visible labels</p>
-                          <span id="visibleLabelCount" style="font-size: 0.8rem; font-weight: bold; color: #aaa;">73</span>
-                      </div>
-                      <div class="labels-list-container" id="sidebarLabelsList"></div>
-                  </div>
-              </div>
-              
-              <div id="leafletMapContainer"></div>
-
-          </div>
-          
-          <div id="editorControlsBlock">
-              <div style="display: flex; gap: 15px;">
-                  <button id="customPauseBtn" style="background: rgba(0,0,0,0.5); color: #fff; border: 1px solid rgba(255,255,255,0.2); padding: 10px 25px; border-radius: 6px; cursor: pointer; font-weight: bold; text-transform: uppercase; font-size: 0.9rem; outline: none; transition: all 0.2s;"><span>PAUSE</span></button>
-                  <button id="randomizeBtn" style="background: #ffb300; color: #000; border: none; padding: 10px 25px; border-radius: 6px; cursor: pointer; font-weight: bold; text-transform: uppercase; font-size: 0.9rem;">RANDOMIZE</button>
-              </div>
-              <div id="skinCreatorAnimationWrap" style="display: flex; align-items: center; gap: 10px;">
-                  <span style="font-size: 0.85rem; color: #ccc;">Animation:</span>
-                  <select id="skinCreatorAnimationSelect" style="background: rgba(0,0,0,0.5); color: #fff; border: 1px solid rgba(255,255,255,0.2); padding: 6px 12px; border-radius: 6px; cursor: pointer; outline: none;"></select>
-              </div>
-          </div>
-      </div>
-
-      <div id="rightConfigPanel">
-          <h2 style="color: #ffb300; margin: 0; text-transform: uppercase; letter-spacing: 1px; font-size: 1.4rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px;">Configuration</h2>
-          <div>
-              <label style="display: block; color: #aaa; margin-bottom: 8px; font-size: 0.85rem; text-transform: uppercase; font-weight: bold;">Species</label>
-              <select id="modelSelect" size="1" onfocus="this.size=8;" onblur="this.size=1;" onchange="this.size=1; this.blur();">
-                  <option value="Allosaurus">Allosaurus</option><option value="Austroraptor">Austroraptor</option><option value="Baryonyx">Baryonyx</option><option value="Beipiaosaurus">Beipiaosaurus</option><option value="Carnotaurus">Carnotaurus</option><option value="Ceratosaurus">Ceratosaurus</option><option value="Deinosuchus">Deinosuchus</option><option value="Diabloceratops">Diabloceratops</option><option value="Dilophosaurus">Dilophosaurus</option><option value="Dryosaurus">Dryosaurus</option><option value="Gallimimus">Gallimimus</option><option value="Herrerasaurus">Herrerasaurus</option><option value="Hypsilophodon">Hypsilophodon</option><option value="Kentrosaurus">Kentrosaurus</option><option value="Maiasaura">Maiasaura</option><option value="Omniraptor">Omniraptor</option><option value="Oviraptor">Oviraptor</option><option value="Pachycephalosaurus">Pachycephalosaurus</option><option value="Pteranodon">Pteranodon</option><option value="Stegosaurus">Stegosaurus</option><option value="Tenontosaurus">Tenontosaurus</option><option value="Triceratops">Triceratops</option><option value="Troodon">Troodon</option><option value="Tyrannosaurus">Tyrannosaurus</option>
-              </select>
-          </div>
-          <div>
-              <label style="display: block; color: #aaa; margin-bottom: 10px; font-size: 0.85rem; text-transform: uppercase; font-weight: bold;">Pattern Style</label>
-              <input type="range" id="pattern" min="0" max="2" value="0" step="1">
-          </div>
-          <select id="age-stage" style="display: none;"><option value="Adult">Adult</option></select>
-          <input type="hidden" id="pattern-variation" value="0"><input type="radio" name="gender" value="male" checked style="display: none;">
-          <h3 style="color: #ffb300; margin: 10px 0 0 0; text-transform: uppercase; font-size: 1.1rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px;">Pigmentation</h3>
-          
-          <div style="display: flex; flex-direction: column; gap: 15px;">
-              <div class="color-row-glass"><span style="color: #ccc;">Body</span><div style="display: flex; align-items: center; gap: 10px;"><div id="bodyPreview" style="width: 16px; height: 16px; border-radius: 4px;"></div><input type="color" id="bodyColor" value="#00ffff" style="border:none; background:none; width:45px; height:30px; cursor:pointer;"></div><input type="hidden" id="bodyColor-r"><input type="hidden" id="bodyColor-g"><input type="hidden" id="bodyColor-b"></div>
-              <div class="color-row-glass"><span style="color: #ccc;">Underbelly</span><div style="display: flex; align-items: center; gap: 10px;"><div id="underbellyPreview" style="width: 16px; height: 16px; border-radius: 4px;"></div><input type="color" id="underbellyColor" value="#00ff00" style="border:none; background:none; width:45px; height:30px; cursor:pointer;"></div><input type="hidden" id="underbellyColor-r"><input type="hidden" id="underbellyColor-g"><input type="hidden" id="underbellyColor-b"></div>
-              <div class="color-row-glass"><span style="color: #ccc;">Markings</span><div style="display: flex; align-items: center; gap: 10px;"><div id="markingsPreview" style="width: 16px; height: 16px; border-radius: 4px;"></div><input type="color" id="markingsColor" value="#ff00ff" style="border:none; background:none; width:45px; height:30px; cursor:pointer;"></div><input type="hidden" id="markingsColor-r"><input type="hidden" id="markingsColor-g"><input type="hidden" id="markingsColor-b"></div>
-              <div class="color-row-glass"><span style="color: #ccc;">Plank</span><div style="display: flex; align-items: center; gap: 10px;"><div id="flankPreview" style="width: 16px; height: 16px; border-radius: 4px;"></div><input type="color" id="flankColor" value="#0000ff" style="border:none; background:none; width:45px; height:30px; cursor:pointer;"></div><input type="hidden" id="flankColor-r"><input type="hidden" id="flankColor-g"><input type="hidden" id="flankColor-b"></div>
-              <div class="color-row-glass"><span style="color: #ccc;">Details</span><div style="display: flex; align-items: center; gap: 10px;"><div id="detail1Preview" style="width: 16px; height: 16px; border-radius: 4px;"></div><input type="color" id="detail1Color" value="#800080" style="border:none; background:none; width:45px; height:30px; cursor:pointer;"></div><input type="hidden" id="detail1Color-r"><input type="hidden" id="detail1Color-g"><input type="hidden" id="detail1Color-b"></div>
-              <div class="color-row-glass"><span style="color: #ccc;">Eyes</span><div style="display: flex; align-items: center; gap: 10px;"><div id="eyesPreview" style="width: 16px; height: 16px; border-radius: 4px;"></div><input type="color" id="eyesColor" value="#ffff00" style="border:none; background:none; width:45px; height:30px; cursor:pointer;"></div><input type="hidden" id="eyesColor-r"><input type="hidden" id="eyesColor-g"><input type="hidden" id="eyesColor-b"></div>
-              <div class="color-row-glass"><span style="color: #ccc;">Male Display</span><div style="display: flex; align-items: center; gap: 10px;"><div id="maleDisplayPreview" style="width: 16px; height: 16px; border-radius: 4px;"></div><input type="color" id="maleDisplayColor" value="#ff0000" style="border:none; background:none; width:45px; height:30px; cursor:pointer;"></div><input type="hidden" id="maleDisplayColor-r"><input type="hidden" id="maleDisplayColor-g"><input type="hidden" id="maleDisplayColor-b"></div>
-          </div>
-          <div style="margin-top: auto; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; gap: 10px;">
-              <span style="font-size: 0.85rem; color: #ffb300; font-weight: bold; text-align: center; text-transform: uppercase;">The Isle Import Code</span>
-              <input type="text" id="isleExportCode" readonly style="width: 100%; background: rgba(0,0,0,0.5); color: #00ffaa; border: 1px solid rgba(255,255,255,0.1); padding: 12px; border-radius: 6px; font-family: monospace; text-align: center; outline: none; backdrop-filter: blur(4px);">
-              <button id="copyIsleCodeBtn" style="width: 100%; background: linear-gradient(135deg, #ffb300, #ff6f00); color: #3e2723; border: none; padding: 14px; border-radius: 6px; font-weight: bold; cursor: pointer;">COPY TO CLIPBOARD</button>
-          </div>
-      </div>
-  </div>
-
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
-  <script src="js/skin-creator.js"></script>
-
-  <script>
-    setTimeout(function() { if (typeof SkinCreator !== 'undefined') SkinCreator.init(); }, 300);
-
-    document.addEventListener('DOMContentLoaded', () => {
-        const patternPrefixes = { "0": "011", "1": "111", "2": "211" };
-        const colorFields = ['underbellyColor', 'bodyColor', 'flankColor', 'markingsColor', 'detail1Color', 'eyesColor', 'maleDisplayColor'];
-
-        function hexToRgb(h) { let r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h); return r?{r:parseInt(r[1],16),g:parseInt(r[2],16),b:parseInt(r[3],16)}:null; }
-        function fC(id) { let i = document.getElementById(id); return (!i||!i.value)?"000000FF":i.value.replace('#','').toUpperCase()+"FF"; }
-
-        window.handleUserChange = function() {
-            const pVal = document.getElementById('pattern') ? document.getElementById('pattern').value : "0";
-            const prefix = patternPrefixes[pVal] || "011";
-            const body       = fC('bodyColor');
-            const underbelly = fC('underbellyColor');
-            const markings   = fC('markingsColor');
-            const detail     = fC('detail1Color');
-            const display    = fC('maleDisplayColor'); 
-            const finalCode = prefix + body + underbelly + markings + detail + display;
-            
-            if(document.getElementById('isleExportCode')) document.getElementById('isleExportCode').value = finalCode;
-
-            colorFields.forEach(id => {
-                const hi = document.getElementById(id);
-                if (hi && hi.value) {
-                    const rgb = hexToRgb(hi.value);
-                    if(rgb) { document.getElementById(id+'-r').value=rgb.r; document.getElementById(id+'-g').value=rgb.g; document.getElementById(id+'-b').value=rgb.b; }
-                    const pr = document.getElementById(id.replace('Color','')+'Preview');
-                    if(pr) { pr.style.backgroundColor = hi.value; pr.style.boxShadow = `0 0 15px ${hi.value}`; }
+        if (this.scene) {
+            this.scene.traverse((object) => {
+                if (object.geometry) {
+                    object.geometry.dispose();
+                }
+                if (object.material) {
+                    if (Array.isArray(object.material)) {
+                        object.material.forEach(material => {
+                            if (material.map) material.map.dispose();
+                            material.dispose();
+                        });
+                    } else {
+                        if (object.material.map) object.material.map.dispose();
+                        object.material.dispose();
+                    }
                 }
             });
-            if(typeof SkinCreator!=='undefined' && typeof SkinCreator.updateModelColors === 'function') SkinCreator.updateModelColors();
+            while(this.scene.children.length > 0) {
+                this.scene.remove(this.scene.children[0]);
+            }
+        }
+        
+        if (this.controls) {
+            this.controls.dispose();
+        }
+        
+        if (this.renderer) {
+            this.renderer.dispose();
+            this.renderer.forceContextLoss();
+            if (this.renderer.domElement && this.renderer.domElement.parentNode) {
+                this.renderer.domElement.parentNode.removeChild(this.renderer.domElement);
+            }
+        }
+        
+        if (this._listenersAbortController) {
+            this._listenersAbortController.abort();
+            this._listenersAbortController = null;
         }
 
-        document.getElementById('randomizeBtn').addEventListener('click', e => {
-            e.preventDefault();
-            colorFields.forEach(id => {
-                let r=Math.floor(Math.random()*256), g=Math.floor(Math.random()*256), b=Math.floor(Math.random()*256);
-                document.getElementById(id+'-r').value=r; document.getElementById(id+'-g').value=g; document.getElementById(id+'-b').value=b;
-                let cI = document.getElementById(id); if(cI) cI.value = "#"+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
-            });
-            window.handleUserChange();
-        });
+        if (this._glitchTextureDebounceTimer) {
+            clearTimeout(this._glitchTextureDebounceTimer);
+            this._glitchTextureDebounceTimer = null;
+        }
 
-        document.getElementById('skinCreatorAnimationSelect').addEventListener('change', e => {
-            let idx = parseInt(e.target.value, 10); if(!isNaN(idx) && typeof SkinCreator!=='undefined') SkinCreator.setAnimationClipIndex(idx);
-        });
-        document.body.addEventListener('change', e => { if(e.target.id==='modelSelect' && typeof SkinCreator!=='undefined') { SkinCreator.loadModel(e.target.value); setTimeout(window.handleUserChange, 400); }});
-        document.body.addEventListener('input', e => { if(['pattern', ...colorFields].includes(e.target.id)) window.handleUserChange(); });
-        document.body.addEventListener('click', e => {
-            if(e.target.id==='copyIsleCodeBtn') { document.getElementById('isleExportCode').select(); document.execCommand('copy'); e.target.innerText="COPIED!"; setTimeout(()=>e.target.innerText="COPY TO CLIPBOARD", 1200); }
-            let btn = e.target.closest('#customPauseBtn');
-            if(btn) { 
-                if(typeof SkinCreator!=='undefined' && SkinCreator.controls) SkinCreator.controls.autoRotate = !SkinCreator.controls.autoRotate; 
-                let span = btn.querySelector('span');
-                if(span) span.innerText = span.innerText==='PAUSE'?'PLAY':'PAUSE'; 
-                btn.style.transform = 'scale(0.95)';
-                setTimeout(()=>btn.style.transform = 'scale(1)', 100);
+        if (this._manifestColorRefreshRaf != null) {
+            cancelAnimationFrame(this._manifestColorRefreshRaf);
+            this._manifestColorRefreshRaf = null;
+        }
+        this._manifestSkinTextureKey = null;
+        this._manifestSharedColorUniforms = null;
+        this._manifestSharedPresentationUniforms = null;
+
+        this.scene = null;
+        this.camera = null;
+        this.renderer = null;
+        this.controls = null;
+        this.model = null;
+        this.modelViewer = null;
+        this.isInitialized = false;
+        this.initRetries = 0;
+        this.sunLight = null;
+        this.ambientLight = null;
+        this.hemisphereLight = null;
+        this.groundMesh = null;
+        if (this.mixer) {
+            this.mixer.stopAllAction();
+            this.mixer = null;
+        }
+        this.clock = null;
+        this.gltfAnimationClips = [];
+        this._currentSkinManifest = null;
+        this._gltfBaseMapSource = null;
+        this._syncAnimationSelectorUI();
+    },
+
+    onWindowResize() {
+        if (!this.modelViewer || !this.camera || !this.renderer) return;
+        const w = this.modelViewer.clientWidth;
+        const h = this.modelViewer.clientHeight;
+        if (!w || !h) return;
+        this.camera.aspect = w / h;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setPixelRatio(
+            Math.min(window.devicePixelRatio || 1, SKIN_VIEWER_MAX_PIXEL_RATIO)
+        );
+        this.renderer.setSize(w, h);
+    },
+
+    toggleRotation() {
+        if (!this.controls) return this.isRotating;
+        this.isRotating = !this.isRotating;
+        this.controls.autoRotate = this.isRotating;
+        return this.isRotating;
+    },
+
+    animate() {
+        if (!this.controls || !this.renderer || !this.scene || !this.camera) return;
+        
+        this.animationId = requestAnimationFrame(this.animate.bind(this));
+        this.controls.update();
+        if (this.mixer && this.clock) {
+            this.mixer.update(this.clock.getDelta());
+        }
+        this.renderer.render(this.scene, this.camera);
+    },
+
+    _installLighting() {
+        if (!this.scene || !this.renderer) return;
+
+        this.renderer.shadowMap.enabled = false;
+        this.renderer.shadowMap.autoUpdate = false;
+
+        this.ambientLight = new THREE.AmbientLight(OASIS_SKIN_VIEWER_AMBIENT_COLOR, OASIS_SKIN_VIEWER_AMBIENT_INTENSITY);
+        this.scene.add(this.ambientLight);
+
+        this.hemisphereLight = new THREE.HemisphereLight(
+            UE5_SKIN_VIEWER_HEMI_SKY,
+            UE5_SKIN_VIEWER_HEMI_GROUND,
+            UE5_SKIN_VIEWER_HEMI_INTENSITY
+        );
+        this.hemisphereLight.position.set(0, 1, 0);
+        this.scene.add(this.hemisphereLight);
+
+        this.sunLight = new THREE.DirectionalLight(
+            OASIS_SKIN_VIEWER_KEY_COLOR,
+            OASIS_SKIN_VIEWER_KEY_INTENSITY
+        );
+        this.sunLight.castShadow = false;
+        this.sunLight.position.set(
+            OASIS_SKIN_VIEWER_KEY_POSITION.x,
+            OASIS_SKIN_VIEWER_KEY_POSITION.y,
+            OASIS_SKIN_VIEWER_KEY_POSITION.z
+        );
+        this.scene.add(this.sunLight);
+
+        this._applySkinViewerPresentationForMode();
+    },
+
+    _applySkinViewerPresentationForMode() {
+        if (!this.renderer || !this.sunLight || !this.ambientLight) return;
+
+        const glitch = this.isGlitchSkinMode();
+
+        if (glitch) {
+            if (THREE.NoToneMapping !== undefined) {
+                this.renderer.toneMapping = THREE.NoToneMapping;
             }
+            if (this.renderer.toneMappingExposure !== undefined) {
+                this.renderer.toneMappingExposure = 1;
+            }
+            this.ambientLight.color.setHex(OASIS_SKIN_VIEWER_AMBIENT_COLOR);
+            this.ambientLight.intensity = OASIS_SKIN_VIEWER_AMBIENT_INTENSITY;
+            this.sunLight.color.setHex(OASIS_SKIN_VIEWER_KEY_COLOR);
+            this.sunLight.intensity = OASIS_SKIN_VIEWER_KEY_INTENSITY;
+            this.sunLight.position.set(
+                OASIS_SKIN_VIEWER_KEY_POSITION.x,
+                OASIS_SKIN_VIEWER_KEY_POSITION.y,
+                OASIS_SKIN_VIEWER_KEY_POSITION.z
+            );
+            if (this.hemisphereLight) {
+                this.hemisphereLight.visible = false;
+                this.hemisphereLight.intensity = 0;
+            }
+            return;
+        }
+
+        if (THREE.ACESFilmicToneMapping !== undefined) {
+            this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        } else if (THREE.ReinhardToneMapping !== undefined) {
+            this.renderer.toneMapping = THREE.ReinhardToneMapping;
+        }
+        if (this.renderer.toneMappingExposure !== undefined) {
+            this.renderer.toneMappingExposure = UE5_SKIN_TONE_MAPPING_EXPOSURE;
+        }
+
+        this.ambientLight.color.setHex(UE5_SKIN_VIEWER_AMBIENT_COLOR);
+        this.ambientLight.intensity = UE5_SKIN_VIEWER_AMBIENT_INTENSITY;
+
+        if (this.hemisphereLight) {
+            this.hemisphereLight.visible = true;
+            this.hemisphereLight.color.setHex(UE5_SKIN_VIEWER_HEMI_SKY);
+            this.hemisphereLight.groundColor.setHex(UE5_SKIN_VIEWER_HEMI_GROUND);
+            this.hemisphereLight.intensity = UE5_SKIN_VIEWER_HEMI_INTENSITY;
+        }
+
+        this.sunLight.color.setHex(UE5_SKIN_VIEWER_SUN_COLOR);
+        this.sunLight.intensity = UE5_SKIN_VIEWER_SUN_INTENSITY;
+        this.sunLight.position.set(
+            UE5_SKIN_VIEWER_SUN_POSITION.x,
+            UE5_SKIN_VIEWER_SUN_POSITION.y,
+            UE5_SKIN_VIEWER_SUN_POSITION.z
+        );
+    },
+
+    setSun(_azimuthDeg, _intensity) {},
+
+    updateGroundPlane() {
+        if (!this.scene) return;
+        if (this.groundMesh) {
+            this.scene.remove(this.groundMesh);
+            if (this.groundMesh.geometry) this.groundMesh.geometry.dispose();
+            if (this.groundMesh.material) this.groundMesh.material.dispose();
+            this.groundMesh = null;
+        }
+    },
+
+    _syncAnimationSelectorUI() {
+        const wrap = document.getElementById('skinCreatorAnimationWrap');
+        const sel = document.getElementById('skinCreatorAnimationSelect');
+        if (!wrap || !sel) return;
+        const clips = this.gltfAnimationClips || [];
+        if (clips.length === 0) {
+            wrap.style.display = 'none';
+            sel.innerHTML = '';
+            return;
+        }
+        wrap.style.display = 'flex';
+        sel.innerHTML = '';
+        clips.forEach((clip, i) => {
+            const opt = document.createElement('option');
+            opt.value = String(i);
+            opt.textContent = labelForAnimationClip(clip, i);
+            sel.appendChild(opt);
         });
-        setTimeout(window.handleUserChange, 1200);
+        sel.value = '0';
+    },
 
-        const btnCr = document.getElementById('btnToggleCreator'), btnMp = document.getElementById('btnToggleMap');
-        const sEd = document.getElementById('skinEditorWindow'), gMp = document.getElementById('gameMapWindow');
-        const rCp = document.getElementById('rightConfigPanel'), eCb = document.getElementById('editorControlsBlock');
+    setAnimationClipIndex(index) {
+        if (!this.mixer || !this.gltfAnimationClips.length) return;
+        const n = this.gltfAnimationClips.length;
+        const i = Math.max(0, Math.min(Number(index) || 0, n - 1));
+        this.mixer.stopAllAction();
+        const action = this.mixer.clipAction(this.gltfAnimationClips[i]);
+        action.reset();
+        action.play();
+    },
 
-        btnCr.addEventListener('click', () => { btnCr.classList.add('active'); btnMp.classList.remove('active'); sEd.style.display='block'; gMp.style.display='none'; rCp.style.display='flex'; eCb.style.display='flex'; });
-        btnMp.addEventListener('click', () => { btnMp.classList.add('active'); btnCr.classList.remove('active'); sEd.style.display='none'; gMp.style.display='block'; rCp.style.display='none'; eCb.style.display='none'; setTimeout(()=>map.invalidateSize(), 100); });
+    _applyLoadedModel(object, animations) {
+        if (!this.scene) return;
 
-        const map = L.map('leafletMapContainer', { crs: L.CRS.Simple, minZoom: -2, maxZoom: 4, zoomControl: false, attributionControl: false });
-        L.control.zoom({ position: 'topright' }).addTo(map);
+        if (this.model && this.scene) {
+            this.scene.remove(this.model);
+            disposeThreeObjectTree(this.model);
+            this.model = null;
+        }
 
-        const bounds = [[0, 0], [2000, 2000]];
-        const baseMapLayer = L.imageOverlay('images/world-map.png', bounds, { zIndex: 1 }).addTo(map);
-        map.fitBounds(bounds);
+        if (this.mixer) {
+            this.mixer.stopAllAction();
+            this.mixer = null;
+        }
 
-        let playerMarker = L.marker([1000, 1000], { icon: L.divIcon({ html: '<div class="player-marker-pulse"></div>', className: '', iconSize: [24,24], iconAnchor: [12, 12] }) }).addTo(map);
-        playerMarker.setOpacity(0);
+        this.model = object;
+        this.gltfAnimationClips =
+            animations && animations.length
+                ? sortClipsByKnownAnimationOrder(animations.slice())
+                : [];
 
-        const layers = { water: L.layerGroup().addTo(map), landmarks: L.layerGroup().addTo(map), regions: L.layerGroup().addTo(map), outposts: L.layerGroup().addTo(map) };
+        if (this.gltfAnimationClips.length > 0) {
+            this.mixer = new THREE.AnimationMixer(this.model);
+            this.setAnimationClipIndex(0);
+        }
 
-        const pinData = [
-            { n: "North Lake", c: "water", top: 20.01953125, left: 76.0009765625 },
-            { n: "Highlands Lake", c: "water", top: 41.015625, left: 46.142578125 },
-            { n: "North River", c: "water", top: 24.4140625, left: 80.56640625 },
-            { n: "Water Access Lake", c: "water", top: 28.4423828125, left: 55.7861328125 },
-            { n: "Water Access River", c: "water", top: 35.0341796875, left: 63.8427734375 },
-            { n: "The Fork", c: "landmarks", top: 43.8232421875, left: 67.5048828125 },
-            { n: "Roaring Falls", c: "landmarks", top: 35.888671875, left: 77.880859375 },
-            { n: "East Lake", c: "water", top: 38.9404296875, left: 86.669921875 },
-            { n: "The Delta", c: "water", top: 55.908203125, left: 66.89453125 },
-            { n: "Aviary Dam", c: "landmarks", top: 54.931640625, left: 43.212890625 },
-            { n: "The Estuary", c: "water", top: 65.91796875, left: 64.208984375 },
-            { n: "Eastern Swamp", c: "regions", top: 69.3359375, left: 57.373046875 },
-            { n: "Western Swamp", c: "regions", top: 71.77734375, left: 46.9970703125 },
-            { n: "South River", c: "water", top: 60.05859375, left: 34.912109375 },
-            { n: "South Lake", c: "water", top: 68.84765625, left: 33.69140625 },
-            { n: "Site B14", c: "outposts", top: 15.625, left: 66.5283203125 },
-            { n: "Site D15", c: "outposts", top: 23.4375, left: 68.84765625 },
-            { n: "Site E14", c: "outposts", top: 28.80859375, left: 65.673828125 },
-            { n: "Site E17", c: "outposts", top: 28.3203125, left: 76.66015625 },
-            { n: "Site F16", c: "outposts", top: 31.1279296875, left: 72.8759765625 },
-            { n: "Site F19", c: "outposts", top: 31.982421875, left: 86.42578125 },
-            { n: "Site F21", c: "outposts", top: 32.3486328125, left: 92.4072265625 },
-            { n: "Site H20", c: "outposts", top: 37.7197265625, left: 88.9892578125 },
-            { n: "Site K17", c: "outposts", top: 50.6591796875, left: 76.416015625 },
-            { n: "Site K15", c: "outposts", top: 52.24609375, left: 70.068359375 },
-            { n: "Site I12", c: "outposts", top: 41.3818359375, left: 56.884765625 },
-            { n: "Site J10-1", c: "outposts", top: 43.45703125, left: 48.2177734375 },
-            { n: "Site J10-2", c: "outposts", top: 45.5322265625, left: 47.119140625 },
-            { n: "Site K8", c: "outposts", top: 53.466796875, left: 40.6494140625 },
-            { n: "Site K7-1", c: "outposts", top: 50.4150390625, left: 36.62109375 },
-            { n: "Site K7-2", c: "outposts", top: 53.1005859375, left: 36.9873046875 },
-            { n: "Site K6", c: "outposts", top: 50.1708984375, left: 32.71484375 },
-            { n: "Site I6", c: "outposts", top: 43.701171875, left: 29.541015625 },
-            { n: "Site N9", c: "outposts", top: 66.162109375, left: 43.9453125 },
-            { n: "Site N11", c: "outposts", top: 63.4765625, left: 52.24609375 },
-            { n: "Eastern Dock", c: "outposts", top: 26.7333984375, left: 90.087890625 },
-            { n: "Western Dock", c: "outposts", top: 73.73046875, left: 14.404296875 },
-            { n: "Northern Paddock", c: "regions", top: 20.3857421875, left: 80.322265625 },
-            { n: "Eastern Paddock", c: "regions", top: 37.59765625, left: 82.1533203125 },
-            { n: "Southern Paddock", c: "regions", top: 74.3408203125, left: 20.8740234375 },
-            { n: "Aviary", c: "regions", top: 58.88671875, left: 46.6796875 },
-            { n: "A.1", c: "landmarks", top: 53.7109375, left: 47.9736328125 },
-            { n: "A.2", c: "landmarks", top: 57.861328125, left: 52.001953125 },
-            { n: "A.3", c: "landmarks", top: 62.6220703125, left: 50.537109375 },
-            { n: "A.6", c: "landmarks", top: 55.5419921875, left: 42.48046875 },
-            { n: "Split Rock", c: "landmarks", top: 41.748046875, left: 72.021484375 },
-            { n: "Tidal Pools", c: "landmarks", top: 46.142578125, left: 85.693359375 },
-            { n: "Kissing Rocks", c: "landmarks", top: 44.43359375, left: 37.59765625 },
-            { n: "Highlands Underpass", c: "landmarks", top: 45.654296875, left: 46.630859375 },
-            { n: "Highlands Valley", c: "landmarks", top: 40.283203125, left: 37.841796875 },
-            { n: "Snakehead Lagoon", c: "landmarks", top: 66.89453125, left: 28.076171875 },
-            { n: "The Gorge", c: "landmarks", top: 54.5654296875, left: 38.6962890625 },
-            { n: "Key Hole", c: "landmarks", top: 23.5595703125, left: 29.296875 },
-            { n: "Caldera", c: "landmarks", top: 27.7099609375, left: 71.533203125 },
-            { n: "Stone Archway", c: "landmarks", top: 20.1416015625, left: 36.2548828125 },
-            { n: "Swamp Valley", c: "landmarks", top: 71.77734375, left: 40.4052734375 },
-            { n: "The Sandbars", c: "landmarks", top: 60.1806640625, left: 25.2685546875 },
-            { n: "Razor Rocks", c: "landmarks", top: 83.740234375, left: 52.24609375 },
-            { n: "Northern Point", c: "landmarks", top: 6.8359375, left: 84.716796875 },
-            { n: "Southern Point", c: "landmarks", top: 82.51953125, left: 30.517578125 },
-            { n: "Seaview Plateau", c: "landmarks", top: 58.837890625, left: 63.96484375 },
-            { n: "The Highlands", c: "regions", top: 39.794921875, left: 41.9921875 },
-            { n: "Northern Plains", c: "regions", top: 20.751953125, left: 77.880859375 },
-            { n: "Southern Plains", c: "regions", top: 73.6083984375, left: 23.92578125 },
-            { n: "Northern Jungle", c: "regions", top: 24.7802734375, left: 60.9130859375 },
-            { n: "Southern Jungle", c: "regions", top: 66.0400390625, left: 34.66796875 },
-            { n: "Central Jungle", c: "regions", top: 44.921875, left: 58.2275390625 },
-            { n: "Eastern Jungle", c: "regions", top: 41.6259765625, left: 80.9326171875 },
-            { n: "The Caldera", c: "regions", top: 27.7099609375, left: 71.533203125 },
-            { n: "The Swamps", c: "regions", top: 70.80078125, left: 53.1005859375 },
-            { n: "The Delta (Region)", c: "regions", top: 55.908203125, left: 66.89453125 },
-            { n: "The Aviary (Region)", c: "regions", top: 58.88671875, left: 46.6796875 },
-            { n: "West Rail", c: "landmarks", top: 50.048828125, left: 27.34375 }
-        ];
+        this.model.scale.set(0.005, 0.005, 0.005);
+        this.scene.add(this.model);
 
-        pinData.forEach(p => {
-            const finalY = 2000 - (2000 * (p.top / 100)); 
-            const finalX = 2000 * (p.left / 100);       
-            p.mapY = finalY; p.mapX = finalX; 
-            L.marker([finalY, finalX], { icon: L.divIcon({ html: `<button class="nerf-map-label">${p.n}</button>`, className: '', iconAnchor: [40, 10] }) }).addTo(layers[p.c]);
+        this.model.updateMatrixWorld(true);
+        const box0 = new THREE.Box3().setFromObject(this.model);
+        const center = new THREE.Vector3();
+        box0.getCenter(center);
+        this.model.position.sub(center);
+
+        this.model.rotation.y = Math.PI / 4;
+        this.model.updateMatrixWorld(true);
+
+        const fitBox = new THREE.Box3().setFromObject(this.model);
+        const size = fitBox.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z, 1e-6);
+        const sphere = fitBox.getBoundingSphere(new THREE.Sphere());
+        const radius = Math.max(sphere.radius, maxDim * 0.5, 1e-6);
+
+        const margin = 1.28;
+        const vFovRad = THREE.Math.degToRad(this.camera.fov);
+        const fitDist = (maxDim * margin) / (2 * Math.tan(vFovRad / 2));
+        const dist = Math.min(Math.max(fitDist, radius * 1.15), radius * 18);
+
+        this.camera.near = Math.max(0.001, radius * 0.003);
+        this.camera.far = Math.max(500, radius * 400);
+        this.camera.updateProjectionMatrix();
+
+        this.camera.position.set(dist * 0.62, dist * 0.38, dist * 0.92);
+        if (this.controls) {
+            this.controls.target.set(0, 0, 0);
+            this.controls.minDistance = Math.max(radius * 0.08, this.camera.near * 3);
+            this.controls.maxDistance = Math.max(radius * 40, dist * 4, 8);
+            this.controls.update();
+        } else {
+            this.camera.lookAt(0, 0, 0);
+        }
+
+        this.updateGroundPlane();
+
+        this._gltfBaseMapSource = null;
+        this.model.traverse((ch) => {
+            if (this._gltfBaseMapSource || !(ch instanceof THREE.Mesh)) return;
+            const mats = ch.material;
+            const m = Array.isArray(mats) ? mats[0] : mats;
+            if (m && m.map) this._gltfBaseMapSource = m.map;
         });
 
-        const overlays = {
-            patrol: L.imageOverlay('images/patrol-layer.png', bounds, { zIndex: 10 }),
-            migration: L.imageOverlay('images/migration-layer.png', bounds, { zIndex: 10 }),
-            sanctuary: L.imageOverlay('images/sanctuary-layer.png', bounds, { zIndex: 10 }),
-            spawns: L.imageOverlay('images/spawns-layer.png', bounds, { zIndex: 10 })
+        this.updateModelColors();
+        this._syncAnimationSelectorUI();
+    },
+
+    loadModel(modelName) {
+        if (!this.scene) {
+            if (!this.isInitialized) {
+                this.init();
+            }
+            return;
+        }
+
+        if (this.model) {
+            this.scene.remove(this.model);
+            if (this.mixer) {
+                this.mixer.stopAllAction();
+                this.mixer = null;
+            }
+            this.model.traverse((child) => {
+                if (child.geometry) child.geometry.dispose();
+                if (child.material) {
+                    if (Array.isArray(child.material)) {
+                        child.material.forEach((m) => disposeSingleMaterial(m));
+                    } else {
+                        disposeSingleMaterial(child.material);
+                    }
+                }
+            });
+            this.model = null;
+        }
+
+        if (this.groundMesh && this.scene) {
+            this.scene.remove(this.groundMesh);
+            if (this.groundMesh.geometry) this.groundMesh.geometry.dispose();
+            if (this.groundMesh.material) this.groundMesh.material.dispose();
+            this.groundMesh = null;
+        }
+
+        this.gltfAnimationClips = [];
+        this._syncAnimationSelectorUI();
+
+        this._modelLoadToken = (this._modelLoadToken || 0) + 1;
+        const expectedToken = this._modelLoadToken;
+        this._currentSkinManifest = null;
+        this._manifestSkinTextureKey = null;
+        this._gltfBaseMapSource = null;
+
+        const manifestUrl = `models/${modelName}/${modelName}.json`;
+        const objPath = `models/${modelName}/${modelName}.obj`;
+        const preferGlb = !!THREE.GLTFLoader;
+        const defaultGlbPath = `models/${modelName}/${modelName}.glb`;
+
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        if (loadingOverlay) {
+            loadingOverlay.style.display = 'flex';
+            loadingOverlay.innerHTML = '<div class="loading-spinner"></div><div>Loading 3D Model...</div>';
+        }
+
+        const loadTimeout = setTimeout(() => {
+            if (loadingOverlay && loadingOverlay.style.display === 'flex') {
+                loadingOverlay.innerHTML = '<div class="loading-spinner"></div><div>Still loading... Please wait</div>';
+            }
+        }, 5000);
+
+        const onProgress = (xhr) => {
+            if (xhr.total > 0) {
+                const percent = Math.round(xhr.loaded / xhr.total * 100);
+                if (loadingOverlay) {
+                    loadingOverlay.innerHTML = `<div class="loading-spinner"></div><div>Loading 3D Model... ${percent}%</div>`;
+                }
+            }
         };
 
-        // -----------------------------------------------------------
-        // ИНТЕРПОЛЯЦИЯ IDW (Inverse Distance Weighting)
-        // -----------------------------------------------------------
+        const onLoadFailed = (path, error) => {
+            clearTimeout(loadTimeout);
+            console.error('Error loading model:', path, error);
+            if (loadingOverlay) {
+                loadingOverlay.innerHTML = '<div style="color: #ff6b6b;">Failed to load model. Please refresh the page.</div>';
+                setTimeout(() => {
+                    if (loadingOverlay) loadingOverlay.style.display = 'none';
+                }, 3000);
+            }
+        };
 
-        const anchors = [
-            { x: -282531, y: 65442, scX: 0.828, scY: 0.868, offX: 8.426, offY: -10.330 },
-            { x: -220995, y: 129670, scX: 0.836, scY: 0.887, offX: 9.074, offY: -16.000 },
-            { x: -115651, y: 208994, scX: 0.821, scY: 0.922, offX: 9.074, offY: -16.000 },
-            { x: -62574, y: 178606, scX: 0.819, scY: 0.924, offX: 7.778, offY: -4.660 },
-            { x: -44580, y: 169867, scX: 0.817, scY: 0.936, offX: 7.778, offY: -4.660 },
-            { x: 0, y: 0, scX: 0.823, scY: 0.917, offX: 8.426, offY: -10.330 }
-        ];
+        const finish = (rootObject, animations) => {
+            clearTimeout(loadTimeout);
+            if (!this.scene || this._modelLoadToken !== expectedToken) {
+                if (loadingOverlay) loadingOverlay.style.display = 'none';
+                disposeThreeObjectTree(rootObject);
+                return;
+            }
+            if (loadingOverlay) loadingOverlay.style.display = 'none';
+            if (this.renderer) {
+                this._upgradeModelTextures(rootObject);
+            }
+            this._applyLoadedModel(rootObject, animations);
+        };
 
-        function getSettingsForCoords(gameX, gameY) {
-            let totalWeight = 0;
-            let wScX = 0, wScY = 0, wOffX = 0, wOffY = 0;
+        const loadObj = () => {
+            const loader = new THREE.OBJLoader();
+            loader.load(
+                objPath,
+                (object) => {
+                    finish(object, null);
+                },
+                onProgress,
+                (error) => onLoadFailed(objPath, error)
+            );
+        };
 
-            for (let a of anchors) {
-                let dist = Math.sqrt(Math.pow(gameX - a.x, 2) + Math.pow(gameY - a.y, 2));
-                if (dist < 1) return { scX: a.scX, scY: a.scY, offX: a.offX, offY: a.offY };
+        const tryLoadGltf = (glbPath) => {
+            if (!preferGlb) {
+                loadObj();
+                return;
+            }
+            const gltfLoader = new THREE.GLTFLoader();
+            gltfLoader.load(
+                glbPath,
+                (gltf) => {
+                    finish(gltf.scene, gltf.animations || []);
+                },
+                onProgress,
+                (error) => {
+                    console.warn('GLB load failed, falling back to OBJ:', glbPath, error);
+                    loadObj();
+                }
+            );
+        };
 
-                let weight = 1 / Math.pow(dist, 2); 
-                wScX += a.scX * weight;
-                wScY += a.scY * weight;
-                wOffX += a.offX * weight;
-                wOffY += a.offY * weight;
-                totalWeight += weight;
+        fetch(manifestUrl)
+            .then((res) => (res.ok ? res.json() : null))
+            .then((manifest) => {
+                if (!this.scene || this._modelLoadToken !== expectedToken) return;
+                if (manifest && typeof manifest === 'object') {
+                    this._currentSkinManifest = manifest;
+                }
+                const file =
+                    manifest && typeof manifest.Model === 'string' && manifest.Model.trim()
+                        ? manifest.Model.trim()
+                        : `${modelName}.glb`;
+                tryLoadGltf(`models/${modelName}/${file}`);
+            })
+            .catch(() => {
+                if (!this.scene || this._modelLoadToken !== expectedToken) return;
+                this._currentSkinManifest = null;
+                tryLoadGltf(defaultGlbPath);
+            });
+    },
+
+    scheduleUpdateModelColors(immediate) {
+        const run = () => {
+            if (this._glitchTextureDebounceTimer) {
+                clearTimeout(this._glitchTextureDebounceTimer);
+                this._glitchTextureDebounceTimer = null;
+            }
+            if (this.isGlitchSkinMode()) {
+                this.syncGlitchFloatsToHexPickers();
+            }
+            this.updateModelColors();
+        };
+        if (immediate) {
+            run();
+            return;
+        }
+        if (this._glitchTextureDebounceTimer) {
+            clearTimeout(this._glitchTextureDebounceTimer);
+        }
+        this._glitchTextureDebounceTimer = setTimeout(run, 220);
+    },
+
+    syncHexPickerToGlitchFloats(inputId) {
+        const hexEl = document.getElementById(inputId);
+        if (!hexEl) return;
+        const rgb = this.hexToRgb(hexEl.value);
+        if (!rgb) return;
+        const axes = ['r', 'g', 'b'];
+        const vals = [rgb.r / 255, rgb.g / 255, rgb.b / 255];
+        axes.forEach((axis, i) => {
+            const el = document.getElementById(`${inputId}-${axis}`);
+            if (el) el.value = String(vals[i]);
+        });
+    },
+
+    updateModelColors() {
+        if (!this.model) return;
+        this._applySkinViewerPresentationForMode();
+        const manifest = this._currentSkinManifest;
+        const hasManifest =
+            manifest &&
+            manifest.BodyMaterial &&
+            manifest.BodyMaterial.Textures &&
+            manifest.BodyMaterial.Textures.BaseMask;
+        if (hasManifest) {
+            this._updateModelColorsFromManifest();
+            return;
+        }
+        this.updateModelColorsLegacy();
+    },
+
+    _ensureWhiteFallbackMap() {
+        if (this._whiteFallbackMap) return this._whiteFallbackMap;
+        const d = new Uint8Array([255, 255, 255, 255]);
+        const t = new THREE.DataTexture(d, 1, 1, THREE.RGBAFormat);
+        t.needsUpdate = true;
+        if (THREE.LinearEncoding !== undefined) {
+            t.encoding = THREE.LinearEncoding;
+        }
+        this._whiteFallbackMap = t;
+        return t;
+    },
+
+    _skinViewerMaxAnisotropy() {
+        const r = this.renderer;
+        if (!r || !r.capabilities || typeof r.capabilities.getMaxAnisotropy !== 'function') {
+            return 1;
+        }
+        return Math.min(SKIN_VIEWER_TEXTURE_ANISOTROPY_CAP, r.capabilities.getMaxAnisotropy());
+    },
+
+    _upgradeTextureQuality(tex) {
+        if (!tex || !this.renderer) return;
+        const maxA = this._skinViewerMaxAnisotropy();
+        if (typeof tex.anisotropy === 'number' && maxA > 1) {
+            tex.anisotropy = maxA;
+        }
+        const img = tex.image;
+        const w = img && img.width;
+        const h = img && img.height;
+        const sizable = typeof w === 'number' && typeof h === 'number' && (w > 1 || h > 1);
+        if (sizable) {
+            if (THREE.LinearFilter !== undefined) {
+                tex.magFilter = THREE.LinearFilter;
+            }
+            if (THREE.LinearMipMapLinearFilter !== undefined) {
+                tex.minFilter = THREE.LinearMipMapLinearFilter;
+                tex.generateMipmaps = true;
+            }
+        }
+        tex.needsUpdate = true;
+    },
+
+    _upgradeMaterialTextures(mat) {
+        if (!mat) return;
+        [
+            'map',
+            'normalMap',
+            'roughnessMap',
+            'metalnessMap',
+            'aoMap',
+            'emissiveMap',
+            'bumpMap',
+            'lightMap',
+            'displacementMap'
+        ].forEach((k) => {
+            if (mat[k]) this._upgradeTextureQuality(mat[k]);
+        });
+    },
+
+    _upgradeModelTextures(root) {
+        if (!root) return;
+        root.traverse((obj) => {
+            if (!obj.material) return;
+            const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+            mats.forEach((m) => this._upgradeMaterialTextures(m));
+        });
+    },
+
+    _skinMeshUniform(inputId) {
+        const rgb = this.getSkinColorRgb(inputId);
+        if (this.isGlitchSkinMode()) {
+            return skinRgbToOasisVec3(rgb.r, rgb.g, rgb.b);
+        }
+        const el = document.getElementById(inputId);
+        const hex = el && el.value ? el.value : '#000000';
+        const c = new THREE.Color(hex);
+        return new THREE.Vector3(
+            skinSrgbChannelToLinear(c.r),
+            skinSrgbChannelToLinear(c.g),
+            skinSrgbChannelToLinear(c.b)
+        );
+    },
+
+    _skinVec3UniformLikeOasis(inputId) {
+        const rgb = this.getSkinColorRgb(inputId);
+        if (this.isGlitchSkinMode()) {
+            return skinRgbToOasisVec3(rgb.r, rgb.g, rgb.b);
+        }
+        return new THREE.Vector3(rgb.r / 255, rgb.g / 255, rgb.b / 255);
+    },
+
+    _ensureManifestSharedColorUniforms() {
+        if (this._manifestSharedColorUniforms) return this._manifestSharedColorUniforms;
+        this._manifestSharedColorUniforms = {
+            uTeethColor: new THREE.Vector3(1, 1, 1),
+            uMouthColor: new THREE.Vector3(1, 1, 1),
+            uClawColor: new THREE.Vector3(1, 1, 1),
+            uColMaleDisplay: new THREE.Vector3(),
+            uColUnderbelly: new THREE.Vector3(),
+            uColFlank: new THREE.Vector3(),
+            uColBody: new THREE.Vector3(),
+            uColMarkings: new THREE.Vector3(),
+            uColDetail: new THREE.Vector3()
+        };
+        return this._manifestSharedColorUniforms;
+    },
+
+    _ensureManifestSharedPresentationUniforms() {
+        if (this._manifestSharedPresentationUniforms) return this._manifestSharedPresentationUniforms;
+        this._manifestSharedPresentationUniforms = {
+            uSkinPatternNeutralGray: { value: SKIN_GLITCH_PATTERN_NEUTRAL_GRAY },
+            uSkinManifestDiffuseGain: { value: SKIN_GLITCH_MANIFEST_DIFFUSE_GAIN },
+            uSkinPreviewSaturation: { value: SKIN_GLITCH_PREVIEW_SATURATION }
+        };
+        return this._manifestSharedPresentationUniforms;
+    },
+
+    _syncManifestPresentationUniformsFromMode() {
+        const u = this._manifestSharedPresentationUniforms;
+        if (!u) return;
+        if (this.isGlitchSkinMode()) {
+            u.uSkinPatternNeutralGray.value = SKIN_GLITCH_PATTERN_NEUTRAL_GRAY;
+            u.uSkinManifestDiffuseGain.value = SKIN_GLITCH_MANIFEST_DIFFUSE_GAIN;
+            u.uSkinPreviewSaturation.value = SKIN_GLITCH_PREVIEW_SATURATION;
+        } else {
+            u.uSkinPatternNeutralGray.value = SKIN_NORMAL_PATTERN_NEUTRAL_GRAY;
+            u.uSkinManifestDiffuseGain.value = SKIN_NORMAL_MANIFEST_DIFFUSE_GAIN;
+            u.uSkinPreviewSaturation.value = SKIN_NORMAL_PREVIEW_SATURATION;
+        }
+    },
+
+    _refreshManifestSkinColorsFromDom() {
+        const manifest = this._currentSkinManifest;
+        const shared = this._manifestSharedColorUniforms;
+        if (!manifest || !shared) return;
+        shared.uTeethColor.copy(manifestLinearColorVec3(manifest, 'TeethColor', [1, 1, 1]));
+        shared.uMouthColor.copy(manifestLinearColorVec3(manifest, 'MouthColor', [1, 1, 1]));
+        shared.uClawColor.copy(manifestLinearColorVec3(manifest, 'ClawColor', [1, 1, 1]));
+        shared.uColMaleDisplay.copy(this._skinVec3UniformLikeOasis('maleDisplayColor'));
+        shared.uColUnderbelly.copy(this._skinVec3UniformLikeOasis('underbellyColor'));
+        shared.uColFlank.copy(this._skinVec3UniformLikeOasis('flankColor'));
+        shared.uColBody.copy(this._skinVec3UniformLikeOasis('bodyColor'));
+        shared.uColMarkings.copy(this._skinVec3UniformLikeOasis('markingsColor'));
+        shared.uColDetail.copy(this._skinVec3UniformLikeOasis('detail1Color'));
+        this._syncManifestPresentationUniformsFromMode();
+    },
+
+    _scheduleManifestColorPreviewRefresh() {
+        if (this._manifestColorRefreshRaf != null) return;
+        this._manifestColorRefreshRaf = requestAnimationFrame(() => {
+            this._manifestColorRefreshRaf = null;
+            if (!this.model || !this._currentSkinManifest) return;
+            if (!this._manifestSharedColorUniforms || !this._manifestSkinTextureKey) {
+                this._updateModelColorsFromManifest();
+                return;
+            }
+            const ck = this._computeManifestSkinTextureCacheKey();
+            if (!ck || ck !== this._manifestSkinTextureKey) {
+                this._updateModelColorsFromManifest();
+                return;
+            }
+            this._refreshManifestSkinColorsFromDom();
+            this.syncColorPreviewDots();
+            if (this.renderer && this.scene && this.camera) {
+                this.renderer.render(this.scene, this.camera);
+            }
+        });
+    },
+
+    _computeManifestSkinTextureCacheKey() {
+        const manifest = this._currentSkinManifest;
+        if (!manifest || !manifest.BodyMaterial || !manifest.BodyMaterial.Textures) return null;
+        const dinoName = document.getElementById('modelSelect') ? document.getElementById('modelSelect').value : '';
+        const patternIndex = document.getElementById('pattern') ? document.getElementById('pattern').value : '0';
+        const ageStageEl = document.getElementById('age-stage');
+        const ageStage = ageStageEl ? ageStageEl.value : 'Adult';
+        const texRoot = manifest.BodyMaterial.Textures;
+        const patternRel = resolvePatternEntryFromManifest(manifest, ageStage, patternIndex);
+        const baseMaskRel = texRoot.BaseMask;
+        const albedoRel = texRoot.AlbedoMap || '';
+        if (!patternRel || !baseMaskRel) return null;
+        const msk = this.isGlitchSkinMode() ? 'g' : 'n';
+        return `${dinoName}|${patternIndex}|${ageStage}|${baseMaskRel}|${patternRel}|${albedoRel}|${msk}`;
+    },
+
+    _prepareSkinIdMaskTexture(tex) {
+        if (!tex) return;
+        tex.generateMipmaps = false;
+        tex.anisotropy = 1;
+        if (THREE.NearestFilter !== undefined) {
+            tex.minFilter = THREE.NearestFilter;
+            tex.magFilter = THREE.NearestFilter;
+        }
+        tex.needsUpdate = true;
+    },
+
+    _cloneTextureLikeMap(sourceTex, refMap, skinnedMesh) {
+        const t = sourceTex.clone();
+        t.needsUpdate = true;
+        if (refMap) {
+            t.offset.copy(refMap.offset);
+            t.repeat.copy(refMap.repeat);
+            t.rotation = refMap.rotation;
+            t.center.copy(refMap.center);
+            t.wrapS = refMap.wrapS;
+            t.wrapT = refMap.wrapT;
+            if (typeof refMap.flipY === 'boolean') {
+                t.flipY = refMap.flipY;
+            }
+        } else {
+            t.flipY = !skinnedMesh;
+        }
+        if (THREE.LinearEncoding !== undefined) {
+            t.encoding = THREE.LinearEncoding;
+        }
+        if (THREE.LinearFilter !== undefined) {
+            t.magFilter = THREE.LinearFilter;
+        }
+        if (THREE.LinearMipMapLinearFilter !== undefined) {
+            t.minFilter = THREE.LinearMipMapLinearFilter;
+            t.generateMipmaps = true;
+        }
+        if (this.renderer) {
+            this._upgradeTextureQuality(t);
+        }
+        return t;
+    },
+
+    _updateModelColorsFromManifest() {
+        const dinoName = document.getElementById('modelSelect').value;
+        const patternIndex = document.getElementById('pattern').value;
+        const ageStageEl = document.getElementById('age-stage');
+        const ageStage = ageStageEl ? ageStageEl.value : 'Adult';
+        const manifest = this._currentSkinManifest;
+        if (!manifest || !manifest.BodyMaterial || !manifest.BodyMaterial.Textures) {
+            this.updateModelColorsLegacy();
+            return;
+        }
+
+        if (patternIndex === "0") {
+            this.updateModelColorsLegacy();
+            return;
+        }
+
+        const base = `models/${dinoName}/`;
+        const texRoot = manifest.BodyMaterial.Textures;
+        const patternRel = resolvePatternEntryFromManifest(manifest, ageStage, patternIndex);
+        const baseMaskRel = texRoot.BaseMask;
+        if (!patternRel || !baseMaskRel) {
+            this.updateModelColorsLegacy();
+            return;
+        }
+        const albedoRel = texRoot.AlbedoMap || '';
+        const cacheKey = this._computeManifestSkinTextureCacheKey();
+        if (!cacheKey) {
+            this.updateModelColorsLegacy();
+            return;
+        }
+
+        if (this._manifestSkinTextureKey === cacheKey && this._manifestSharedColorUniforms && this.model) {
+            this._refreshManifestSkinColorsFromDom();
+            this.syncColorPreviewDots();
+            if (this.renderer && this.scene && this.camera) {
+                this.renderer.render(this.scene, this.camera);
+            }
+            return;
+        }
+
+        this._updateColorsToken = (this._updateColorsToken || 0) + 1;
+        const token = this._updateColorsToken;
+        const textureLoader = new THREE.TextureLoader();
+        const loadTex = (rel) =>
+            new Promise((resolve, reject) => {
+                textureLoader.load(
+                    base + rel,
+                    (tex) => resolve(tex),
+                    undefined,
+                    (err) => reject(err)
+                );
+            });
+
+        Promise.all([
+            loadTex(baseMaskRel),
+            loadTex(patternRel),
+            albedoRel ? loadTex(albedoRel) : Promise.resolve(null)
+        ])
+            .then(([baseTex, patternTex, albedoTex]) => {
+                if (!this.model || token !== this._updateColorsToken) {
+                    baseTex.dispose();
+                    patternTex.dispose();
+                    if (albedoTex) albedoTex.dispose();
+                    return;
+                }
+                this._upgradeTextureQuality(baseTex);
+                this._upgradeTextureQuality(patternTex);
+                if (albedoTex) this._upgradeTextureQuality(albedoTex);
+                const white = this._ensureWhiteFallbackMap();
+                const albedoSrc = albedoTex || white;
+                const glbMap = this._gltfBaseMapSource;
+
+                const shared = this._ensureManifestSharedColorUniforms();
+                this._ensureManifestSharedPresentationUniforms();
+                this._refreshManifestSkinColorsFromDom();
+
+                const isSkinnedMesh = (child) => child instanceof THREE.SkinnedMesh;
+
+                const buildMat = (oldMat, child) => {
+                    const skinned = isSkinnedMesh(child);
+                    const refMap = oldMat && oldMat.map;
+                    const normalMap = oldMat && oldMat.normalMap;
+                    const normalScale = oldMat && oldMat.normalScale;
+                    const metalness = 0;
+                    const roughness = Math.max(
+                        oldMat && typeof oldMat.roughness === 'number' ? oldMat.roughness : 0.82,
+                        0.98
+                    );
+                    const morphNormals = oldMat && oldMat.morphNormals === true;
+                    const useMorph = child.morphTargetInfluences && child.morphTargetInfluences.length > 0;
+                    if (oldMat) {
+                        oldMat.map = null;
+                        oldMat.normalMap = null;
+                        disposeSingleMaterial(oldMat);
+                    }
+
+                    const uvRef = glbMap || refMap;
+                    const bm = this._cloneTextureLikeMap(baseTex, uvRef, skinned);
+                    const pm = this._cloneTextureLikeMap(patternTex, uvRef, skinned);
+                    if (!this.isGlitchSkinMode()) {
+                        this._prepareSkinIdMaskTexture(bm);
+                        this._prepareSkinIdMaskTexture(pm);
+                    }
+                    const am = this._cloneTextureLikeMap(albedoSrc, uvRef, skinned);
+                    const om = glbMap
+                        ? this._cloneTextureLikeMap(glbMap, uvRef, skinned)
+                        : this._cloneTextureLikeMap(white, uvRef, skinned);
+
+                    const mat = new THREE.MeshStandardMaterial({
+                        map: white,
+                        metalness,
+                        roughness,
+                        envMapIntensity: 0,
+                        skinning: skinned,
+                        morphTargets: useMorph,
+                        morphNormals: useMorph && morphNormals,
+                        transparent: true
+                    });
+                    if (normalMap) {
+                        mat.normalMap = normalMap;
+                        if (normalScale) {
+                            mat.normalScale.copy(normalScale);
+                        }
+                        this._upgradeTextureQuality(normalMap);
+                    }
+
+                    const pres = this._ensureManifestSharedPresentationUniforms();
+
+                    const uniformsSkin = {
+                        uSkinBaseMask: { value: bm },
+                        uSkinPattern: { value: pm },
+                        uSkinAlbedo: { value: am },
+                        uSkinOrigMap: { value: om },
+                        uTeethColor: { value: shared.uTeethColor },
+                        uMouthColor: { value: shared.uMouthColor },
+                        uClawColor: { value: shared.uClawColor },
+                        uColMaleDisplay: { value: shared.uColMaleDisplay },
+                        uColUnderbelly: { value: shared.uColUnderbelly },
+                        uColFlank: { value: shared.uColFlank },
+                        uColBody: { value: shared.uColBody },
+                        uColMarkings: { value: shared.uColMarkings },
+                        uColDetail: { value: shared.uColDetail },
+                        uSkinPatternNeutralGray: pres.uSkinPatternNeutralGray,
+                        uSkinManifestDiffuseGain: pres.uSkinManifestDiffuseGain,
+                        uSkinPreviewSaturation: pres.uSkinPreviewSaturation
+                    };
+
+                    mat.onBeforeCompile = (shader) => {
+                        shader.uniforms.uSkinBaseMask = uniformsSkin.uSkinBaseMask;
+                        shader.uniforms.uSkinPattern = uniformsSkin.uSkinPattern;
+                        shader.uniforms.uSkinAlbedo = uniformsSkin.uSkinAlbedo;
+                        shader.uniforms.uSkinOrigMap = uniformsSkin.uSkinOrigMap;
+                        shader.uniforms.uTeethColor = uniformsSkin.uTeethColor;
+                        shader.uniforms.uMouthColor = uniformsSkin.uMouthColor;
+                        shader.uniforms.uClawColor = uniformsSkin.uClawColor;
+                        shader.uniforms.uColMaleDisplay = uniformsSkin.uColMaleDisplay;
+                        shader.uniforms.uColUnderbelly = uniformsSkin.uColUnderbelly;
+                        shader.uniforms.uColFlank = uniformsSkin.uColFlank;
+                        shader.uniforms.uColBody = uniformsSkin.uColBody;
+                        shader.uniforms.uColMarkings = uniformsSkin.uColMarkings;
+                        shader.uniforms.uColDetail = uniformsSkin.uColDetail;
+                        shader.uniforms.uSkinPatternNeutralGray = uniformsSkin.uSkinPatternNeutralGray;
+                        shader.uniforms.uSkinManifestDiffuseGain = uniformsSkin.uSkinManifestDiffuseGain;
+                        shader.uniforms.uSkinPreviewSaturation = uniformsSkin.uSkinPreviewSaturation;
+                        shader.fragmentShader = SKIN_SHADER_PREAMBLE + shader.fragmentShader;
+                        shader.fragmentShader = shader.fragmentShader.replace(
+                            '#include <map_fragment>',
+                            SKIN_MAP_FRAGMENT_REPLACE
+                        );
+                    };
+
+                    mat.needsUpdate = true;
+                    return mat;
+                };
+
+                this.model.traverse((child) => {
+                    if (!(child instanceof THREE.Mesh)) return;
+                    const old = child.material;
+                    if (Array.isArray(old)) {
+                        child.material = old.map((m) => buildMat(m, child));
+                    } else {
+                        child.material = buildMat(old, child);
+                    }
+                    child.castShadow = false;
+                    child.receiveShadow = false;
+                });
+
+                baseTex.dispose();
+                patternTex.dispose();
+                if (albedoTex) albedoTex.dispose();
+
+                this._manifestSkinTextureKey = cacheKey;
+
+                if (this.renderer && this.scene && this.camera) {
+                    this.renderer.render(this.scene, this.camera);
+                }
+                this.syncColorPreviewDots();
+            })
+            .catch((err) => {
+                console.warn('Manifest skin texture load failed, using legacy path:', err);
+                if (token === this._updateColorsToken) {
+                    this.updateModelColorsLegacy();
+                }
+            });
+    },
+
+    updateModelColorsLegacy() {
+        if (!this.model) return;
+
+        const patternIndex = document.getElementById('pattern').value;
+        const dinoName = document.getElementById('modelSelect').value;
+        const textureLoader = new THREE.TextureLoader();
+        const ageStageEl = document.getElementById('age-stage');
+        const ageStage = ageStageEl ? ageStageEl.value : 'Adult';
+        
+        const filePatternNum = parseInt(patternIndex, 10) + 1;
+
+        const texturePath = ageStage === 'Adult'
+            ? `models/${dinoName}/T_${dinoName}_Adult_Pattern_${filePatternNum}.png`
+            : `models/${dinoName}/T_${dinoName}_${ageStage}_Pattern.png`;
+        
+        console.log('Loading texture from:', texturePath);
+
+        textureLoader.load(
+            texturePath,
+            (texture) => {
+                console.log('Texture loaded successfully');
+            
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const img = texture.image;
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+            
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            
+            const colorMapping = {
+                "maleDisplay": { color: [255, 0, 0], tolerance: 10 },      
+                "markings": { color: [255, 0, 255], tolerance: 10 },       
+                "flank": { color: [0, 0, 255], tolerance: 10 },            
+                "body": { color: [0, 255, 255], tolerance: 30 },          
+                "underbelly": { color: [0, 255, 0], tolerance: 10 },       
+                "detail1": { color: [128, 0, 128], tolerance: 10 },        
+                "eyes": { color: [255, 255, 0], tolerance: 10 }            
+            };
+
+            this.debugInfo = {
+                imageSize: { width: canvas.width, height: canvas.height },
+                colorMapping: colorMapping,
+                selectedColors: {},
+                pixelCounts: {},
+                matchedPixels: {}
+            };
+            
+            const colorsMatch = (r1, g1, b1, [r2, g2, b2], tolerance, part) => {
+                const dr = Math.abs(r1 - r2);
+                const dg = Math.abs(g1 - g2);
+                const db = Math.abs(b1 - b2);
+                
+                if (part === 'body') {
+                    const matches = dr <= tolerance && dg <= tolerance && db <= tolerance;
+                    if (matches) {
+                        return g1 > r1 + 5 && b1 > r1 + 5;
+                    }
+                    return false;
+                }
+
+                const allBlack = Object.entries(this.debugInfo.selectedColors).every(([_, color]) => 
+                    color.rgb.r === 0 && color.rgb.g === 0 && color.rgb.b === 0
+                );
+
+                if (allBlack) {
+                    switch(part) {
+                        case 'markings':
+                            return r1 > g1 + 50 && b1 > g1 + 50;
+                        case 'flank':
+                            return b1 > r1 + 50 && b1 > g1 + 50;
+                        case 'body':
+                            return g1 > r1 + 50 && b1 > r1 + 50;
+                        case 'underbelly':
+                            return g1 > r1 + 50 && g1 > b1 + 50;
+                        case 'maleDisplay':
+                            return r1 > g1 + 50 && r1 > b1 + 50;
+                        case 'detail1':
+                            return Math.abs(r1 - b1) < 20 && r1 > g1 + 30;
+                        case 'eyes':
+                            return r1 > b1 + 50 && g1 > b1 + 50;
+                        default:
+                            return false;
+                    }
+                }
+
+                const matches = dr <= tolerance && dg <= tolerance && db <= tolerance;
+                if (!matches) return false;
+
+                for (const [otherPart, { color }] of Object.entries(colorMapping)) {
+                    if (otherPart !== part) {
+                        const [or, og, ob] = color;
+                        const otherDr = Math.abs(r1 - or);
+                        const otherDg = Math.abs(g1 - og);
+                        const otherDb = Math.abs(b1 - ob);
+                        const otherTotalDiff = otherDr + otherDg + otherDb;
+                        const currentTotalDiff = dr + dg + db;
+                        
+                        if (otherTotalDiff < currentTotalDiff) {
+                            return false;
+                        }
+                    }
+                }
+                
+                return true;
+            };
+
+            const masks = {};
+            const pixelCounts = {};
+            for (const part in colorMapping) {
+                masks[part] = new Uint8Array(data.length / 4);
+                pixelCounts[part] = 0;
             }
 
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+                const pixelIndex = i / 4;
+
+                let bestPart = null;
+                let bestDiff = Infinity;
+
+                for (const [part, { color, tolerance }] of Object.entries(colorMapping)) {
+                    if (colorsMatch(r, g, b, color, tolerance, part)) {
+                        const [cr, cg, cb] = color;
+                        const diff = Math.abs(r - cr) + Math.abs(g - cg) + Math.abs(b - cb);
+                        if (diff < bestDiff) {
+                            bestDiff = diff;
+                            bestPart = part;
+                        }
+                    }
+                }
+
+                if (bestPart) {
+                    masks[bestPart][pixelIndex] = 1;
+                    pixelCounts[bestPart]++;
+                }
+            }
+
+            this.debugInfo.pixelCounts = pixelCounts;
+            
+            for (const [part, mask] of Object.entries(masks)) {
+                const picker = document.getElementById(part + 'Color');
+                if (picker) {
+                    const newColor = this.getSkinColorPreviewBytes(part + 'Color');
+                    if (newColor) {
+                        this.debugInfo.selectedColors[part] = {
+                            hex: picker.value,
+                            rgb: newColor,
+                            glitch: this.isGlitchSkinMode()
+                        };
+
+                        for (let i = 0; i < mask.length; i++) {
+                            if (mask[i]) {
+                                const pixelIndex = i * 4;
+                                data[pixelIndex] = newColor.r;
+                                data[pixelIndex + 1] = newColor.g;
+                                data[pixelIndex + 2] = newColor.b;
+                                data[pixelIndex + 3] = 255; 
+                            }
+                        }
+                    }
+                }
+            }
+
+
+            const coloredPixels = new Uint8Array(data.length / 4);
+            for (const mask of Object.values(masks)) {
+                for (let i = 0; i < mask.length; i++) {
+                    if (mask[i]) coloredPixels[i] = 1;
+                }
+            }
+
+            const underbellyPicker = document.getElementById('underbellyColor');
+            const flankPicker = document.getElementById('flankColor');
+            const bodyPicker = document.getElementById('bodyColor');
+            const underbellyColor = underbellyPicker ? this.getSkinColorPreviewBytes('underbellyColor') : null;
+            const flankColor = flankPicker ? this.getSkinColorPreviewBytes('flankColor') : null;
+            const bodyColor = bodyPicker ? this.getSkinColorPreviewBytes('bodyColor') : null;
+
+            for (let i = 0; i < data.length; i += 4) {
+                const pixelIndex = i / 4;
+
+                if (coloredPixels[pixelIndex]) continue;
+
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+
+                if (underbellyColor && g > r + 20 && g > b + 20 && g > 100) {
+                    data[i] = underbellyColor.r;
+                    data[i + 1] = underbellyColor.g;
+                    data[i + 2] = underbellyColor.b;
+                }
+                else if (flankColor && b > r + 20 && b > g + 20 && b > 100) {
+                    data[i] = flankColor.r;
+                    data[i + 1] = flankColor.g;
+                    data[i + 2] = flankColor.b;
+                }
+                else if (bodyColor && g > r + 20 && b > r + 20 && Math.abs(g - b) < 50) {
+                    data[i] = bodyColor.r;
+                    data[i + 1] = bodyColor.g;
+                    data[i + 2] = bodyColor.b;
+                }
+            }
+            
+            ctx.putImageData(imageData, 0, 0);
+
+            const baseTextureTemplate = new THREE.Texture(canvas);
+            baseTextureTemplate.needsUpdate = true;
+            if (THREE.sRGBEncoding !== undefined) {
+                baseTextureTemplate.encoding = THREE.sRGBEncoding;
+            }
+            this._upgradeTextureQuality(baseTextureTemplate);
+
+            const applyPatternMaterial = (child, oldMat) => {
+                const skinned = child instanceof THREE.SkinnedMesh;
+                const useMorph = child.morphTargetInfluences && child.morphTargetInfluences.length > 0;
+                const map = baseTextureTemplate.clone();
+                map.needsUpdate = true;
+                map.flipY = !skinned;
+                const prevMap = oldMat && oldMat.map;
+                if (prevMap) {
+                    map.offset.copy(prevMap.offset);
+                    map.repeat.copy(prevMap.repeat);
+                    map.rotation = prevMap.rotation;
+                    map.center.copy(prevMap.center);
+                    map.wrapS = prevMap.wrapS;
+                    map.wrapT = prevMap.wrapT;
+                    if (typeof prevMap.flipY === 'boolean') {
+                        map.flipY = prevMap.flipY;
+                    }
+                }
+                const mat = new THREE.MeshStandardMaterial({
+                    map,
+                    metalness: oldMat && typeof oldMat.metalness === 'number' ? oldMat.metalness : 0,
+                    roughness: Math.max(
+                        oldMat && typeof oldMat.roughness === 'number' ? oldMat.roughness : 0.82,
+                        0.92
+                    ),
+                    envMapIntensity: 0,
+                    skinning: skinned,
+                    morphTargets: useMorph,
+                    morphNormals: useMorph && oldMat && oldMat.morphNormals === true
+                });
+                if (oldMat && oldMat.normalMap) {
+                    mat.normalMap = oldMat.normalMap;
+                    if (oldMat.normalScale) {
+                        mat.normalScale.copy(oldMat.normalScale);
+                    }
+                    this._upgradeTextureQuality(oldMat.normalMap);
+                }
+                mat.needsUpdate = true;
+                child.material = mat;
+                child.castShadow = false;
+                child.receiveShadow = false;
+            };
+
+            this.model.traverse((child) => {
+                if (!(child instanceof THREE.Mesh)) return;
+                const old = child.material;
+                if (Array.isArray(old)) {
+                    child.material = old.map((m) => {
+                        const skinned = child instanceof THREE.SkinnedMesh;
+                        const useMorph = child.morphTargetInfluences && child.morphTargetInfluences.length > 0;
+                        const map = baseTextureTemplate.clone();
+                        map.needsUpdate = true;
+                        map.flipY = !skinned;
+                        const prevMap = m && m.map;
+                        if (prevMap) {
+                            map.offset.copy(prevMap.offset);
+                            map.repeat.copy(prevMap.repeat);
+                            map.rotation = prevMap.rotation;
+                            map.center.copy(prevMap.center);
+                            map.wrapS = prevMap.wrapS;
+                            map.wrapT = prevMap.wrapT;
+                            if (typeof prevMap.flipY === 'boolean') {
+                                map.flipY = prevMap.flipY;
+                            }
+                        }
+                        const mat = new THREE.MeshStandardMaterial({
+                            map,
+                            metalness: m && typeof m.metalness === 'number' ? m.metalness : 0,
+                            roughness: Math.max(
+                                m && typeof m.roughness === 'number' ? m.roughness : 0.82,
+                                0.92
+                            ),
+                            envMapIntensity: 0,
+                            skinning: skinned,
+                            morphTargets: useMorph,
+                            morphNormals: useMorph && m && m.morphNormals === true
+                        });
+                        if (m && m.normalMap) {
+                            mat.normalMap = m.normalMap;
+                            if (m.normalScale) {
+                                mat.normalScale.copy(m.normalScale);
+                            }
+                            this._upgradeTextureQuality(m.normalMap);
+                        }
+                        mat.needsUpdate = true;
+                        return mat;
+                    });
+                    child.castShadow = false;
+                    child.receiveShadow = false;
+                } else {
+                    applyPatternMaterial(child, old);
+                }
+            });
+            
+            if (this.renderer && this.scene && this.camera) {
+                this.renderer.render(this.scene, this.camera);
+            }
+
+            this.syncColorPreviewDots();
+        },
+        undefined,
+        (error) => {
+            console.error('Failed to load texture:', texturePath);
+            console.error('Error details:', error);
+
+            const errorMsg = `Could not load pattern ${patternIndex} for ${dinoName}. The texture file may be missing.`;
+            console.warn(errorMsg);
+
+            if (this.showModal) {
+                this.showModal('Texture Load Error', errorMsg);
+            }
+        });
+    },
+
+    debugColors() {
+        if (!this.model) return;
+
+        this.model.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+                const skinned = child instanceof THREE.SkinnedMesh;
+                const useMorph = child.morphTargetInfluences && child.morphTargetInfluences.length > 0;
+                child.material = new THREE.MeshStandardMaterial({
+                    color: 0x000000,
+                    metalness: 0,
+                    roughness: 1,
+                    skinning: skinned,
+                    morphTargets: useMorph
+                });
+                child.material.needsUpdate = true;
+                child.castShadow = false;
+                child.receiveShadow = false;
+            }
+        });
+
+        if (this.renderer && this.scene && this.camera) {
+            this.renderer.render(this.scene, this.camera);
+        }
+
+        const patternIndex = document.getElementById('pattern')?.value || '0';
+
+        console.log('=== ENHANCED DEBUG INFORMATION ===');
+        console.log('Image size:', this.debugInfo.imageSize);
+        
+        console.log('\nColor Mapping Analysis:');
+        Object.entries(this.debugInfo.colorMapping).forEach(([part, info]) => {
+            const [r, g, b] = info.color;
+            console.log(`\n${part}:`);
+            console.log(`  Base Color: RGB(${r}, ${g}, ${b})`);
+            console.log(`  Current Tolerance: ${info.tolerance}`);
+            
+            const picker = document.getElementById(part + 'Color');
+            if (picker) {
+                const hex = picker.value;
+                const selected = this.debugInfo.selectedColors[part]?.rgb;
+                if (selected) {
+                    console.log(`  Selected Color: RGB(${selected.r}, ${selected.g}, ${selected.b}), HEX: ${hex}`);
+                }
+            }
+            
+            const colorTotal = r + g + b;
+            const dominantChannel = Math.max(r, g, b);
+            const isRed = r === dominantChannel;
+            const isGreen = g === dominantChannel;
+            const isBlue = b === dominantChannel;
+            
+            console.log(`  Color Analysis:`);
+            console.log(`    - Total Intensity: ${colorTotal}`);
+            console.log(`    - Dominant Channel: ${isRed ? 'Red' : isGreen ? 'Green' : 'Blue'}`);
+            console.log(`    - R:G:B Ratio: ${(r/dominantChannel).toFixed(2)}:${(g/dominantChannel).toFixed(2)}:${(b/dominantChannel).toFixed(2)}`);
+            
+            const count = this.debugInfo.pixelCounts[part] || 0;
+            console.log(`  Matched Pixels: ${count}`);
+            
+            let recommendedTolerance = 10;
+            
+            if (patternIndex === '1' || patternIndex === '2') {
+                const colorSpread = Math.max(Math.abs(r - g), Math.abs(g - b), Math.abs(r - b));
+                recommendedTolerance = Math.max(5, Math.min(15, Math.floor(colorSpread * 0.15)));
+            } else {
+                recommendedTolerance = Math.max(5, Math.min(20, Math.floor(colorTotal * 0.02)));
+            }
+            
+            console.log(`  Recommended Tolerance: ${recommendedTolerance}`);
+            
+            if (this.debugInfo.pixelCounts[part] > 0) {
+                const expectedPixels = this.debugInfo.imageSize.width * this.debugInfo.imageSize.height / Object.keys(this.debugInfo.colorMapping).length;
+                const overlapRatio = this.debugInfo.pixelCounts[part] / expectedPixels;
+                console.log(`  Overlap Analysis:`);
+                console.log(`    - Expected Pixels: ~${Math.floor(expectedPixels)}`);
+                console.log(`    - Actual/Expected Ratio: ${overlapRatio.toFixed(2)}`);
+                if (overlapRatio > 1.2) {
+                    console.log('    ⚠️ WARNING: This part may be overlapping with others');
+                }
+            }
+        });
+
+        console.log('\nPattern Analysis:');
+        console.log(`Current Pattern: ${patternIndex}`);
+        console.log(`Pattern Characteristics:`);
+        switch(patternIndex) {
+            case '0':
+                console.log('- Standard pattern (Default tolerance settings)');
+                break;
+            case '1':
+                console.log('- Pattern B (Known for color bleeding issues)');
+                console.log('- Recommended: Use stricter tolerance and color dominance checks');
+                break;
+            case '2':
+                console.log('- Pattern C (Known for color bleeding issues)');
+                console.log('- Recommended: Use stricter tolerance and color dominance checks');
+                break;
+        }
+
+        console.log('\nRecommendations:');
+        const totalPixels = Object.values(this.debugInfo.pixelCounts).reduce((a, b) => a + b, 0);
+        const coverage = totalPixels / (this.debugInfo.imageSize.width * this.debugInfo.imageSize.height);
+        console.log(`Total Coverage: ${(coverage * 100).toFixed(1)}%`);
+        
+        if (coverage > 1.1) {
+            console.log('⚠️ WARNING: Significant overlap detected between parts');
+            console.log('Recommendations:');
+            console.log('1. Decrease tolerance values');
+            console.log('2. Enable strict color dominance checks');
+            console.log('3. Consider using unique color channels for each part');
+        } else if (coverage < 0.9) {
+            console.log('⚠️ WARNING: Gaps detected in color mapping');
+            console.log('Recommendations:');
+            console.log('1. Increase tolerance values');
+            console.log('2. Check for missing color regions');
+        }
+    },
+
+    showServerSelectionModal() {
+        return new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-backdrop skin-creator-modal';
+            overlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; z-index: 10000;';
+
+            overlay.innerHTML = `
+                <div class="modal" style="background: rgba(13, 18, 14, 0.95); border: 1px solid #ffb300; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); max-width: 400px; width: 90%; padding: 2rem; border-radius: 12px; position: relative;" onclick="event.stopPropagation()">
+                    <div class="modal-header" style="margin-bottom: 1.5rem; display: flex; justify-content: center; align-items: center; border-bottom: none; position: relative;">
+                        <h2 style="font-family: Changa One, sans-serif; color: #ffb300; font-size: 1.8rem; text-transform: uppercase; letter-spacing: 1px; margin: 0; text-align: center;">Select Server</h2>
+                        <button class="close-btn" style="position: absolute; right: 0; top: 50%; transform: translateY(-50%); background: none; border: none; color: #ccc; font-size: 1.5rem; cursor: pointer; line-height: 1; padding: 0.25rem;">×</button>
+                    </div>
+                    <div class="modal-body" style="display: flex; flex-direction: column; align-items: stretch; gap: 1rem; text-align: center;">
+                        <p style="text-align: center; color: #ccc; margin: 0 0 0.5rem 0;">Please select the server region to apply your skin to.</p>
+                        <button class="server-select-btn" data-server="EU" style="background: linear-gradient(90deg, rgba(33, 150, 243, 0.1), rgba(33, 150, 243, 0.2)); border: 1px solid rgba(33, 150, 243, 0.5); padding: 1rem; border-radius: 8px; color: #fff; font-size: 1.2rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;">
+                            EU Server
+                        </button>
+                        <button class="server-select-btn" data-server="NA" style="background: linear-gradient(90deg, rgba(244, 67, 54, 0.1), rgba(244, 67, 54, 0.2)); border: 1px solid rgba(244, 67, 54, 0.5); padding: 1rem; border-radius: 8px; color: #fff; font-size: 1.2rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;">
+                            NA Server
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(overlay);
+
+            const cleanup = (result) => {
+                overlay.style.display = 'none';
+                setTimeout(() => {
+                    if (overlay.parentNode) overlay.remove();
+                }, 100);
+                resolve(result);
+            };
+
+            overlay.querySelectorAll('.server-select-btn').forEach(btn => {
+                btn.addEventListener('click', () => cleanup(btn.dataset.server));
+            });
+            overlay.querySelector('.close-btn').addEventListener('click', () => cleanup(null));
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(null); });
+        });
+    },
+
+    showProgressModal(title, content) {
+        const existingModal = document.getElementById('skin-progress-modal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        const overlay = document.createElement('div');
+        overlay.id = 'skin-progress-modal';
+        overlay.className = 'modal-backdrop';
+        overlay.style.display = 'flex';
+        
+        overlay.innerHTML = `
+            <div class="modal" style="max-width: 400px; background: rgba(13, 18, 14, 0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);">
+                <div class="modal-header">
+                    <h2 id="progress-title">${title}</h2>
+                </div>
+                <div class="modal-body" style="text-align: center; padding: 2rem;">
+                    <div class="progress-spinner" style="margin-bottom: 1rem;">
+                        <div style="width: 50px; height: 50px; border: 4px solid rgba(199, 146, 62, 0.2); border-top-color: var(--accent-gold, #c7923e); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+                    </div>
+                    <p id="progress-content" style="color: var(--text-soft); font-size: 1.1rem;">${content}</p>
+                </div>
+            </div>
+        `;
+        
+        if (!document.getElementById('spin-animation-style')) {
+            const style = document.createElement('style');
+            style.id = 'spin-animation-style';
+            style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+            document.head.appendChild(style);
+        }
+        
+        document.body.appendChild(overlay);
+        
+        return {
+            update: (newTitle, newContent) => {
+                const titleEl = document.getElementById('progress-title');
+                const contentEl = document.getElementById('progress-content');
+                if (titleEl) titleEl.textContent = newTitle;
+                if (contentEl) contentEl.innerHTML = newContent;
+            },
+            close: () => {
+                overlay.style.display = 'none';
+                setTimeout(() => {
+                    if (overlay.parentNode) {
+                        overlay.remove();
+                    }
+                }, 100);
+            }
+        };
+    },
+
+    showModal(title, content, type = 'info', options = {}) {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-backdrop skin-creator-modal';
+        overlay.style.display = 'flex';
+        
+        let iconHtml = '';
+        switch(type) {
+            case 'success':
+                iconHtml = '<i class="fas fa-check"></i>';
+                break;
+            case 'error':
+                iconHtml = '<i class="fas fa-times"></i>';
+                break;
+            case 'info':
+                iconHtml = '<i class="fas fa-info"></i>';
+                break;
+        }
+
+        const cancelLabel = options.cancelText != null ? options.cancelText : 'Cancel';
+        overlay.innerHTML = `
+            <div class="modal modal-small">
+                <div class="modal-header">
+                    <div class="modal-icon ${type}">${iconHtml}</div>
+                    <h2>${title}</h2>
+                    <button type="button" class="close-btn" aria-label="Close">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="modal-content">
+                        ${content}
+                        ${options.input ? `
+                            <div class="app-input-wrapper" style="margin-top: 1rem; text-align: left;">
+                                <input type="text" class="app-input modal-input" placeholder="${options.placeholder || ''}" value="${options.value || ''}" />
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    ${options.showCancel ? `
+                        <button type="button" class="app-btn app-btn-red" data-action="cancel">${cancelLabel}</button>
+                    ` : ''}
+                    <button type="button" class="app-btn app-btn-green" data-action="confirm">${options.confirmText || 'OK'}</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(overlay);
+
+        return new Promise((resolve) => {
+            const confirmBtn = overlay.querySelector('[data-action="confirm"]');
+            const cancelBtn = overlay.querySelector('[data-action="cancel"]');
+            const closeBtn = overlay.querySelector('.close-btn');
+            const input = overlay.querySelector('.modal-input');
+
+            const cleanup = (result) => {
+                overlay.style.display = 'none';
+                setTimeout(() => {
+                    document.body.removeChild(overlay);
+                }, 300);
+                resolve(result);
+            };
+
+            confirmBtn.addEventListener('click', () => {
+                cleanup(input ? input.value : true);
+            });
+
+            if (cancelBtn) {
+                cancelBtn.addEventListener('click', () => {
+                    cleanup(false);
+                });
+            }
+
+            if (closeBtn) {
+                closeBtn.addEventListener('click', () => {
+                    cleanup(false);
+                });
+            }
+
+            if (!options.input) {
+                overlay.addEventListener('click', (e) => {
+                    if (e.target === overlay) {
+                        cleanup(false);
+                    }
+                });
+            }
+        });
+    },
+
+    showCooldownModalWithPatreon(timeMessage) {
+        return new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                background: rgba(0, 0, 0, 0.85);
+                backdrop-filter: blur(8px);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                z-index: 9999;
+                animation: fadeIn 0.3s ease-out;
+            `;
+            
+            overlay.innerHTML = `
+                <div class="glass-card" style="
+                    width: 450px;
+                    max-width: 90vw;
+                    padding: 2.5rem;
+                    border: 1px solid rgba(255, 179, 0, 0.3);
+                    box-shadow: 0 0 40px rgba(255, 179, 0, 0.1), inset 0 0 20px rgba(255, 179, 0, 0.05);
+                    animation: slideUp 0.3s ease-out;
+                    background: rgba(13, 18, 14, 0.95);
+                    backdrop-filter: blur(20px);
+                    -webkit-backdrop-filter: blur(20px);
+                ">
+                    <div style="text-align: center; margin-bottom: 2rem;">
+                        <h2 style="
+                            font-family: 'Changa One', sans-serif;
+                            font-size: 2rem;
+                            color: #ffb300;
+                            text-transform: uppercase;
+                            letter-spacing: 1px;
+                            margin-bottom: 0.5rem;
+                        ">⏱️ Cooldown Active</h2>
+                        <div class="scanline"></div>
+                    </div>
+
+                    <div style="
+                        text-align: center;
+                        background: rgba(0,0,0,0.3);
+                        border-radius: 12px;
+                        padding: 2rem;
+                        border: 1px solid rgba(255, 179, 0, 0.2);
+                        margin-bottom: 1.5rem;
+                    ">
+                        <div style="font-size: 4rem; margin-bottom: 1rem; animation: pulse 2s infinite;">⏳</div>
+                        <p style="color: #aaa; margin-bottom: 0.5rem; font-size: 1rem;">
+                            Please wait <strong style="color: #ffb300;">${timeMessage}</strong> before applying another skin.
+                        </p>
+                    </div>
+
+                    <div style="
+                        text-align: center;
+                        background: rgba(255, 179, 0, 0.1);
+                        border-radius: 12px;
+                        padding: 1.5rem;
+                        border: 1px solid rgba(255, 179, 0, 0.3);
+                        margin-bottom: 1.5rem;
+                    ">
+                        <p style="color: #ffb300; font-size: 0.95rem; margin-bottom: 1rem; font-weight: 600;">
+                            ⭐ Get Patreon to lower your cooldown!
+                        </p>
+                        <a href="https://www.patreon.com/NerfOfficial" target="_blank" rel="noopener noreferrer" style="text-decoration: none; display: inline-block;">
+                            <button class="amber-btn" style="width: 100%; justify-content: center; padding: 0.75rem 1.5rem;">
+                                <span>GET PATREON</span>
+                            </button>
+                        </a>
+                    </div>
+
+                    <button class="amber-btn close-cooldown-modal" style="width: 100%; justify-content: center;">
+                        <span>CLOSE</span>
+                    </button>
+                </div>
+            `;
+            
+            document.body.appendChild(overlay);
+            
+            const cleanup = () => {
+                overlay.style.opacity = '0';
+                setTimeout(() => {
+                    if (overlay.parentNode) {
+                        overlay.remove();
+                    }
+                    resolve(true);
+                }, 300);
+            };
+            
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    cleanup();
+                }
+            });
+            
+            const closeBtn = overlay.querySelector('.close-cooldown-modal');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', cleanup);
+            }
+        });
+    },
+
+    async savePreset() {
+        try {
+            const saveAsGlitch = this.isGlitchSkinMode() && this.canSaveFullGlitchPreset();
+            if (this.isGlitchSkinMode() && !this.canSaveFullGlitchPreset()) {
+                this.syncGlitchFloatsToHexPickers();
+            }
+
+            const presetName = await this.showModal(
+                'Save Preset',
+                saveAsGlitch
+                    ? 'Enter a name for this glitch preset:'
+                    : 'Enter a name for this preset:',
+                'info',
+                {
+                    input: true,
+                    placeholder: 'Preset name',
+                    showCancel: true,
+                    confirmText: 'Save'
+                }
+            );
+
+            if (!presetName) return; 
+
+            const storeKey = saveAsGlitch ? this.PRESET_KEY_GLITCH : this.PRESET_KEY;
+            const presets = JSON.parse(localStorage.getItem(storeKey)) || {};
+
+            if (presets[presetName]) {
+                const overwrite = await this.showModal(
+                    'Confirm Overwrite',
+                    `A ${saveAsGlitch ? 'glitch ' : ''}preset named "${presetName}" already exists. Overwrite it?`,
+                    'info',
+                    {
+                        showCancel: true,
+                        confirmText: 'Overwrite'
+                    }
+                );
+                if (!overwrite) return;
+            }
+
+            if (this.isGlitchSkinMode()) {
+                this.syncGlitchFloatsToHexPickers();
+            }
+
+            const currentSettings = {
+                colors: {},
+                patternVariation: document.getElementById('pattern-variation')?.value || '0',
+                pattern: document.getElementById('pattern')?.value || '0',
+                gender: document.querySelector('input[name="gender"]:checked')?.value || 'male',
+                sunAzimuth: OASIS_SKIN_EXPORT_SUN_AZIMUTH,
+                sunIntensity: OASIS_SKIN_EXPORT_SUN_INTENSITY,
+                timestamp: new Date().toISOString()
+            };
+
+            if (window.colorPickers) {
+                Object.entries(window.colorPickers).forEach(([key, picker]) => {
+                    if (picker) {
+                        currentSettings.colors[key] = picker.value;
+                    }
+                });
+            } else {
+                document.querySelectorAll('input[type="color"]').forEach((input) => {
+                    if (input.id) {
+                        currentSettings.colors[input.id] = input.value;
+                    }
+                });
+            }
+
+            if (saveAsGlitch) {
+                currentSettings.glitchSkin = true;
+                currentSettings.glitchColors = {};
+                SKIN_COLOR_INPUT_IDS.forEach((id) => {
+                    currentSettings.glitchColors[id] = this.getSkinColorRgb(id);
+                });
+            }
+
+            presets[presetName] = currentSettings;
+            localStorage.setItem(storeKey, JSON.stringify(presets));
+
+            this.updatePresetsDropdown();
+
+            await this.showModal(
+                'Success',
+                saveAsGlitch
+                    ? `Glitch preset "${presetName}" saved successfully!`
+                    : `Preset "${presetName}" saved successfully!`,
+                'success',
+                { confirmText: 'OK' }
+            );
+        } catch (error) {
+            console.error('Error saving preset:', error);
+            await this.showModal(
+                'Error',
+                `Failed to save preset: ${error.message || 'Unknown error'}`,
+                'error',
+                { confirmText: 'OK' }
+            );
+        }
+    },
+
+    async loadPreset(presetName, bucket) {
+        try {
+            const storeKey = bucket === 'glitch' ? this.PRESET_KEY_GLITCH : this.PRESET_KEY;
+            const presets = JSON.parse(localStorage.getItem(storeKey)) || {};
+            const preset = presets[presetName];
+
+            if (!preset) {
+                await this.showModal(
+                    'Error',
+                    `Preset "${presetName}" not found!`,
+                    'error',
+                    { confirmText: 'OK' }
+                );
+                return;
+            }
+
+            const patternVariation = document.getElementById('pattern-variation');
+            const pattern = document.getElementById('pattern');
+            const genderInput = document.querySelector(`input[name="gender"][value="${preset.gender}"]`);
+
+            if (patternVariation) patternVariation.value = preset.patternVariation;
+            if (pattern) pattern.value = preset.pattern;
+            if (genderInput) genderInput.checked = true;
+
+            if (bucket === 'glitch') {
+                if (!this.canSaveFullGlitchPreset()) {
+                    await this.showModal(
+                        'Error',
+                        'Glitch presets require Sub Patreon tier or higher.',
+                        'error',
+                        { confirmText: 'OK' }
+                    );
+                    return;
+                }
+                if (!preset.glitchColors || typeof preset.glitchColors !== 'object') {
+                    await this.showModal(
+                        'Error',
+                        'This glitch preset is missing color data.',
+                        'error',
+                        { confirmText: 'OK' }
+                    );
+                    return;
+                }
+                this._applyFullGlitchEditorFromPreset(preset);
+                this.scheduleUpdateModelColors(true);
+            } else {
+                const marker = document.getElementById('glitch-skin-mode');
+                if (marker) {
+                    marker.dataset.active = 'false';
+                    window.dispatchEvent(new CustomEvent('skinCreatorGlitchState', { detail: { active: false } }));
+                }
+
+                if (window.colorPickers) {
+                    Object.entries(preset.colors || {}).forEach(([key, value]) => {
+                        if (window.colorPickers[key]) {
+                            window.colorPickers[key].value = value;
+                            window.colorPickers[key].dispatchEvent(new Event('input'));
+                        }
+                    });
+                } else {
+                    Object.entries(preset.colors || {}).forEach(([key, value]) => {
+                        const input = document.getElementById(key);
+                        if (input) {
+                            input.value = value;
+                            input.dispatchEvent(new Event('input'));
+                        }
+                    });
+                }
+                this.updateModelColors();
+            }
+
+            await this.showModal(
+                'Success',
+                bucket === 'glitch'
+                    ? `Glitch preset "${presetName}" loaded successfully!`
+                    : `Preset "${presetName}" loaded successfully!`,
+                'success',
+                { confirmText: 'OK' }
+            );
+        } catch (error) {
+            console.error('Error loading preset:', error);
+            await this.showModal(
+                'Error',
+                `Failed to load preset: ${error.message || 'Unknown error'}`,
+                'error',
+                { confirmText: 'OK' }
+            );
+        }
+    },
+
+    async deletePreset(presetName, bucket) {
+        try {
+            const storeKey = bucket === 'glitch' ? this.PRESET_KEY_GLITCH : this.PRESET_KEY;
+            const presets = JSON.parse(localStorage.getItem(storeKey)) || {};
+
+            if (!presets[presetName]) {
+                await this.showModal(
+                    'Error',
+                    `Preset "${presetName}" not found!`,
+                    'error',
+                    { confirmText: 'OK' }
+                );
+                return;
+            }
+
+            const confirm = await this.showModal(
+                'Confirm Delete',
+                `Delete ${bucket === 'glitch' ? 'glitch ' : ''}preset "${presetName}"?`,
+                'error',
+                {
+                    showCancel: true,
+                    confirmText: 'Delete'
+                }
+            );
+
+            if (!confirm) return;
+
+            delete presets[presetName];
+            localStorage.setItem(storeKey, JSON.stringify(presets));
+
+            this.updatePresetsDropdown();
+
+            await this.showModal(
+                'Success',
+                `Preset "${presetName}" deleted successfully!`,
+                'success',
+                { confirmText: 'OK' }
+            );
+        } catch (error) {
+            console.error('Error deleting preset:', error);
+            await this.showModal(
+                'Error',
+                `Failed to delete preset: ${error.message || 'Unknown error'}`,
+                'error',
+                { confirmText: 'OK' }
+            );
+        }
+    },
+
+    async checkAdminStatus(discordId) {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/auth/status`, {
+                method: 'GET',
+                credentials: 'include'
+            });
+
+            if (!response.ok) {
+                return false;
+            }
+
+            const data = await response.json();
+            return data.authenticated && (data.user?.isAdmin === true || data.user?.canAccessAdminPanel === true);
+        } catch (error) {
+            console.error('Error checking admin status:', error);
+            return false;
+        }
+    },
+
+    async getCsrfToken() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/csrf-token`, {
+                credentials: 'include'
+            });
+            const data = await response.json();
+            return data.token || data.csrfToken;
+        } catch (error) {
+            console.error('Error getting CSRF token:', error);
+            return 'csrf-placeholder';
+        }
+    },
+
+    async applySkin() {
+        let progressModal = null;
+        
+        try {
+            const server = await this.showServerSelectionModal();
+            if (!server) return; 
+
+            progressModal = this.showProgressModal('Applying Skin', '🔄 Checking login status...');
+            
+const discordId = "local_offline_user";
+console.log('Applying skin for user:', discordId);
+            
+            progressModal.update('Applying Skin', '🔄 Checking permissions...');
+            
+            const csrfToken = await this.getCsrfToken();
+            
+            const isAdmin = await this.checkAdminStatus(discordId);
+            console.log('User admin status:', isAdmin);
+            
+            if (!isAdmin) {
+                progressModal.update('Applying Skin', '🔄 Checking cooldown...');
+                console.log('User is not admin, checking cooldown...');
+                
+                const reductionResponse = await fetch(`${API_BASE_URL}/api/skin-cooldown-reduction`, {
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include'
+                });
+                
+                if (!reductionResponse.ok) {
+                    console.warn('Failed to check cooldown reduction, using default');
+                }
+                
+                let cooldownReduction = 0;
+                try {
+                    const reductionData = await reductionResponse.json();
+                    console.log('Cooldown reduction data:', reductionData);
+                    cooldownReduction = reductionData.reduction || 0;
+                } catch (error) {
+                    console.warn('Error parsing cooldown reduction data:', error);
+                    cooldownReduction = 0;
+                }
+                
+                const baseCooldown = 1800000;
+                const adjustedCooldown = Math.max(60000, baseCooldown * (1 - cooldownReduction));
+                
+                const cooldownKey = `lastSkinApplied_${discordId}`;
+                const lastApplied = localStorage.getItem(cooldownKey);
+                
+                if (lastApplied) {
+                    const lastAppliedTime = parseInt(lastApplied);
+                    const timeDiff = Date.now() - lastAppliedTime;
+                    const timeLeft = adjustedCooldown - timeDiff;
+                    
+                    if (timeLeft > 0) {
+                        const minutesLeft = Math.ceil(timeLeft / 60000);
+                        const secondsLeft = Math.ceil((timeLeft % 60000) / 1000);
+                        
+                        let timeMessage;
+                        if (minutesLeft > 0) {
+                            timeMessage = `${minutesLeft} minute${minutesLeft > 1 ? 's' : ''}`;
+                            if (minutesLeft === 1 && secondsLeft > 0) {
+                                timeMessage += ` and ${secondsLeft} second${secondsLeft > 1 ? 's' : ''}`;
+                            }
+                        } else {
+                            timeMessage = `${secondsLeft} second${secondsLeft > 1 ? 's' : ''}`;
+                        }
+                        
+                        let hasPatreon = false;
+                        try {
+                            const authResponse = await fetch(`${API_BASE_URL}/api/auth/status`, {
+                                headers: { 'Content-Type': 'application/json' },
+                                credentials: 'include'
+                            });
+                            if (authResponse.ok) {
+                                const authData = await authResponse.json();
+                                hasPatreon = authData.user?.hasPatreonRole === true;
+                            }
+                        } catch (error) {
+                            console.warn('Failed to check Patreon status:', error);
+                        }
+                        
+                        progressModal.close();
+                        
+                        if (!hasPatreon) {
+                            await this.showCooldownModalWithPatreon(timeMessage);
+                        } else {
+                            await this.showModal(
+                                'Cooldown Active',
+                                `⏳ Please wait ${timeMessage} before applying another skin.`,
+                                'error',
+                                { confirmText: 'OK' }
+                            );
+                        }
+                        return;
+                    }
+                }
+            }
+
+            progressModal.update('Applying Skin', '🔄 Verifying Steam ID...');
+            
+            const steamidResponse = await fetch(`${API_BASE_URL}/api/get-steamid`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include'
+            });
+            
+            if (!steamidResponse.ok) {
+                throw new Error('Failed to get Steam ID');
+            }
+            
+            const steamidData = await steamidResponse.json();
+            
+            if (!steamidData.steamid) {
+                progressModal.close();
+                await this.showModal(
+                    'Error',
+                    '🔗 Please link your Steam ID first.',
+                    'error',
+                    { confirmText: 'OK' }
+                );
+                return;
+            }
+
+            const steamid = steamidData.steamid;
+
+            progressModal.update('Applying Skin', '🎮 Checking if you are online on the server...');
+
+            const glitchSkin = this.isGlitchSkinMode();
+            const colors = {
+                maleDisplayColor: this.getSkinColorRgb('maleDisplayColor'),
+                markingsColor: this.getSkinColorRgb('markingsColor'),
+                bodyColor: this.getSkinColorRgb('bodyColor'),
+                flankColor: this.getSkinColorRgb('flankColor'),
+                underbellyColor: this.getSkinColorRgb('underbellyColor'),
+                detail1Color: this.getSkinColorRgb('detail1Color'),
+                eyesColor: this.getSkinColorRgb('eyesColor')
+            };
+
+            const genderInput = document.querySelector('input[name="gender"]:checked');
+            const gender = genderInput ? genderInput.value : 'male';
+            const genderParam = gender === 'female' ? 'f' : 'm';
+
+            const skinVariation = parseFloat(document.getElementById('pattern-variation').value);
+            const pattern = parseInt(document.getElementById('pattern').value);
+
+            if (!discordId) {
+                throw new Error('Discord ID is not available. Please make sure you are logged in.');
+            }
+
+            progressModal.update('Applying Skin', '🎨 Sending skin to game server...');
+
+            const response = await fetch(`${API_BASE_URL}/api/apply-skin`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                    gender: genderParam,
+                    skinVariation: skinVariation,
+                    pattern: pattern,
+                    glitchSkin: glitchSkin,
+                    maleDisplayColor: colors.maleDisplayColor,
+                    markingsColor: colors.markingsColor,
+                    bodyColor: colors.bodyColor,
+                    flankColor: colors.flankColor,
+                    underbellyColor: colors.underbellyColor,
+                    detail1Color: colors.detail1Color,
+                    eyesColor: colors.eyesColor,
+                    server: server
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                console.error('Server response:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    error: errorData
+                });
+                
+                if (response.status === 401) {
+                    throw new Error('Please log in to apply skins');
+                } else if (response.status === 403) {
+                    const msg =
+                        errorData.message ||
+                        (errorData.code === 'GLITCH_SKIN_PATREON'
+                            ? 'Glitch skins require Sub Patreon tier or higher.'
+                            : null);
+                    throw new Error(msg || 'You do not have permission to apply skins');
+                } else if (response.status === 429) {
+                    throw new Error(errorData.message || 'Please wait before applying another skin');
+                } else if (errorData.error === 'Not online') {
+                    throw new Error(errorData.message || 'You must be logged into the game server to apply a skin');
+                } else if (errorData.error === 'Cannibalistic') {
+                    throw new Error(errorData.message || 'Cannot apply skin if you have Cannibalistic mutation');
+                }
+                
+                throw new Error(errorData.message || errorData.error || `Server error: ${response.status}`);
+            }
+
+            const result = await response.json();
+
+            progressModal.close();
+
+            if (result.success) {
+                if (!isAdmin) {
+                    const cooldownKey = `lastSkinApplied_${discordId}`;
+                    localStorage.setItem(cooldownKey, Date.now().toString());
+                }
+                
+                await this.showModal(
+                    'Success',
+                    '✅ Skin applied successfully!\n\nYour dinosaur now has the new skin.',
+                    'success',
+                    { confirmText: 'OK' }
+                );
+            } else {
+                throw new Error(result.message || 'Failed to apply skin');
+            }
+
+        } catch (error) {
+            console.error('Error applying skin:', error);
+            
+            if (progressModal) {
+                progressModal.close();
+            }
+            
+            let errorMessage = error.message;
+            let errorTitle = 'Error';
+            
+            if (error.message.includes('Cannibalistic')) {
+                errorTitle = 'Cannot Apply Skin';
+                errorMessage = 'Cannot apply skin if you have Cannibalistic mutation';
+            } else if (error.message.includes('Not online') || error.message.includes('logged into the game')) {
+                errorTitle = 'Not Online';
+                errorMessage = '🎮 You must be logged into the game server to apply a skin.\n\nPlease join the server and try again.';
+            } else if (error.message.includes('Failed to communicate with dino service')) {
+                errorMessage = '🔌 The game server is currently unavailable.\n\nPlease try again later.';
+            } else if (error.message.includes('Failed to get Steam ID') || error.message.includes('Steam account is linked')) {
+                errorMessage = '🔗 Could not verify your Steam ID.\n\nPlease make sure your Steam account is linked.';
+            } else if (error.message.includes('Cooldown')) {
+                errorTitle = 'Cooldown Active';
+            }
+            
+            await this.showModal(
+                errorTitle,
+                `❌ ${errorMessage}`,
+                'error',
+                { confirmText: 'OK' }
+            );
+        }
+    },
+
+    isGlitchSkinMode() {
+        const el = document.getElementById('glitch-skin-mode');
+        if (!el) return false;
+        const raw = el.getAttribute('data-active');
+        if (raw === 'true') return true;
+        if (raw === 'false') return false;
+        return String(el.dataset.active || '') === 'true';
+    },
+
+    canSaveFullGlitchPreset() {
+        const m = document.getElementById('glitch-skin-mode');
+        return !!(m && m.dataset.canGlitch === 'true');
+    },
+
+    _applyFullGlitchEditorFromPreset(preset) {
+        if (!preset || !preset.glitchColors || typeof preset.glitchColors !== 'object') return false;
+        const marker = document.getElementById('glitch-skin-mode');
+        if (!marker || marker.dataset.canGlitch !== 'true') return false;
+
+        SKIN_COLOR_INPUT_IDS.forEach((id) => {
+            const rgb = preset.glitchColors[id];
+            if (!rgb || typeof rgb !== 'object') return;
+            ['r', 'g', 'b'].forEach((axis) => {
+                const el = document.getElementById(`${id}-${axis}`);
+                if (!el) return;
+                const v = rgb[axis];
+                const n = Number(v);
+                el.value =
+                    v !== undefined && v !== null && Number.isFinite(n)
+                        ? String(clampGlitchLinearChannel(n))
+                        : '0';
+            });
+            const hexEl = document.getElementById(id);
+            if (hexEl) {
+                hexEl.value = this.floatRgbToHexForPicker(
+                    Number(rgb.r) || 0,
+                    Number(rgb.g) || 0,
+                    Number(rgb.b) || 0
+                );
+            }
+        });
+        marker.dataset.active = 'true';
+        window.dispatchEvent(new CustomEvent('skinCreatorGlitchState', { detail: { active: true } }));
+        return true;
+    },
+
+    _wirePresetSelectMutex(signal) {
+        const selN = document.getElementById('presets-select');
+        const selG = document.getElementById('presets-select-glitch');
+        if (!selN || !selG) return;
+        selN.addEventListener(
+            'change',
+            () => {
+                if (selN.value) selG.value = '';
+            },
+            { signal }
+        );
+        selG.addEventListener(
+            'change',
+            () => {
+                if (selG.value) selN.value = '';
+            },
+            { signal }
+        );
+    },
+
+    _getSelectedPresetBucketName() {
+        const selG = document.getElementById('presets-select-glitch');
+        const selN = document.getElementById('presets-select');
+        const g = selG && selG.value;
+        const n = selN && selN.value;
+        if (g) return { bucket: 'glitch', name: g };
+        if (n) return { bucket: 'normal', name: n };
+        return null;
+    },
+
+    getSkinColorRgb(inputId) {
+        if (this.isGlitchSkinMode()) {
+            const parseCh = (suffix) => {
+                const el = document.getElementById(`${inputId}-${suffix}`);
+                if (!el || el.value === '') return 0;
+                const n = skinParseRgbFieldNumber(el.value);
+                return clampGlitchLinearChannel(Number.isFinite(n) ? n : 0);
+            };
             return {
-                scX: wScX / totalWeight,
-                scY: wScY / totalWeight,
-                offX: wOffX / totalWeight,
-                offY: wOffY / totalWeight
+                r: parseCh('r'),
+                g: parseCh('g'),
+                b: parseCh('b')
             };
         }
+        const hexEl = document.getElementById(inputId);
+        return this.hexToRgb(hexEl ? hexEl.value : '#000000') || { r: 0, g: 0, b: 0 };
+    },
 
-        // --- ЛОГИКА КАЛИБРОВКИ ---
-        let currentBaseX = 0;
-        let currentBaseY = 0;
+    getSkinColorPreviewBytes(inputId) {
+        const rgb = this.getSkinColorRgb(inputId);
+        if (this.isGlitchSkinMode()) {
+            return {
+                r: glitchFloatToPreviewByte(rgb.r),
+                g: glitchFloatToPreviewByte(rgb.g),
+                b: glitchFloatToPreviewByte(rgb.b)
+            };
+        }
+        return rgb;
+    },
 
-        function updateMarkerPosition() {
-            const scX = parseFloat(document.getElementById('slideScaleX').value);
-            const scY = parseFloat(document.getElementById('slideScaleY').value);
-            const offX = parseFloat(document.getElementById('slideOffsetX').value);
-            const offY = parseFloat(document.getElementById('slideOffsetY').value);
+    syncGlitchFloatsToHexPickers() {
+        if (!this.isGlitchSkinMode()) return;
+        const ids = SKIN_COLOR_INPUT_IDS;
+        ids.forEach((id) => {
+            const rgb = this.getSkinColorRgb(id);
+            const hexEl = document.getElementById(id);
+            if (!hexEl) return;
+            hexEl.value = this.floatRgbToHexForPicker(rgb.r, rgb.g, rgb.b);
+        });
+    },
 
-            document.getElementById('valScaleX').innerText = scX.toFixed(3);
-            document.getElementById('valScaleY').innerText = scY.toFixed(3);
-            document.getElementById('valOffsetX').innerText = offX.toFixed(3);
-            document.getElementById('valOffsetY').innerText = offY.toFixed(3);
+    floatRgbToHexForPicker(r, g, b) {
+        const R = glitchChannelToDisplayByte(r),
+            G = glitchChannelToDisplayByte(g),
+            B = glitchChannelToDisplayByte(b);
+        return '#' + [R, G, B].map((x) => x.toString(16).padStart(2, '0')).join('');
+    },
 
-            if (currentBaseX && currentBaseY) {
-                let finalX = 1000 + (currentBaseX - 1000) * scX + offX;
-                let finalY = 1000 + (currentBaseY - 1000) * scY + offY;
+    syncColorPreviewDots() {
+        const ids = SKIN_COLOR_INPUT_IDS;
+        ids.forEach((id) => {
+            const previewId = id.replace('Color', '') + 'Preview';
+            const preview = document.getElementById(previewId);
+            if (!preview) return;
+            const rgb = this.getSkinColorPreviewBytes(id);
+            preview.style.backgroundColor = `rgb(${rgb.r},${rgb.g},${rgb.b})`;
+            preview.style.boxShadow = `0 0 15px rgb(${rgb.r},${rgb.g},${rgb.b})`;
+        });
+    },
 
-                playerMarker.setLatLng([finalY, finalX]);
-            }
+    hexToRgb(hex) {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16)
+        } : null;
+    },
+
+    generateSkinCode() {
+        if (this.isGlitchSkinMode()) {
+            this.syncGlitchFloatsToHexPickers();
         }
 
-        document.getElementById('slideScaleX').addEventListener('input', updateMarkerPosition);
-        document.getElementById('slideScaleY').addEventListener('input', updateMarkerPosition);
-        document.getElementById('slideOffsetX').addEventListener('input', updateMarkerPosition);
-        document.getElementById('slideOffsetY').addEventListener('input', updateMarkerPosition);
+        const settings = {
+            colors: {},
+            patternVariation: document.getElementById('pattern-variation')?.value || '0',
+            pattern: document.getElementById('pattern')?.value || '0',
+            gender: document.querySelector('input[name="gender"]:checked')?.value || 'male',
+            model: document.getElementById('modelSelect')?.value || 'Allosaurus',
+            sunAzimuth: OASIS_SKIN_EXPORT_SUN_AZIMUTH,
+            sunIntensity: OASIS_SKIN_EXPORT_SUN_INTENSITY
+        };
 
-        document.getElementById('btnFocusMap').addEventListener('click', (e) => {
-            if(e) e.preventDefault();
-            const val = document.getElementById('coordInput').value.trim();
-            let parsed = val.replace(/,/g, '');
-            const pts = parsed.match(/-?\d+(\.\d+)?/g);
-            
-            if(pts && pts.length >= 2) {
-                let gameX = parseFloat(pts[0]);
-                let gameY = parseFloat(pts[1]);
-                
-                if (Math.abs(gameX) < 2000 && Math.abs(gameY) < 2000) {
-                    gameX *= 1000;
-                    gameY *= 1000;
+        SKIN_COLOR_INPUT_IDS.forEach((id) => {
+            const input = document.getElementById(id);
+            if (input) {
+                settings.colors[id] = input.value;
+            }
+        });
+
+        if (this.isGlitchSkinMode()) {
+            settings.glitchSkin = true;
+            settings.glitchColors = {};
+            SKIN_COLOR_INPUT_IDS.forEach((id) => {
+                settings.glitchColors[id] = this.getSkinColorRgb(id);
+            });
+        }
+
+        const jsonStr = JSON.stringify(settings);
+        const code = btoa(jsonStr);
+        return code;
+    },
+
+    loadSkinCode(code) {
+        try {
+            const jsonStr = atob(code);
+            const settings = JSON.parse(jsonStr);
+
+            const marker = document.getElementById('glitch-skin-mode');
+            const useGlitchImport =
+                settings.glitchSkin === true &&
+                settings.glitchColors &&
+                typeof settings.glitchColors === 'object';
+            const canGlitchImport = !!(marker && marker.dataset.canGlitch === 'true');
+
+            const modelSelect = document.getElementById('modelSelect');
+            if (modelSelect && settings.model) {
+                modelSelect.value = settings.model;
+                this.loadModel(settings.model);
+            }
+
+            const patternVariation = document.getElementById('pattern-variation');
+            const pattern = document.getElementById('pattern');
+            const genderInput = document.querySelector(`input[name="gender"][value="${settings.gender}"]`);
+
+            if (patternVariation) patternVariation.value = settings.patternVariation;
+            if (pattern) pattern.value = settings.pattern;
+            if (genderInput) genderInput.checked = true;
+
+            if (useGlitchImport && canGlitchImport) {
+                SKIN_COLOR_INPUT_IDS.forEach((id) => {
+                    const rgb = settings.glitchColors[id];
+                    if (!rgb || typeof rgb !== 'object') return;
+                    ['r', 'g', 'b'].forEach((axis) => {
+                        const el = document.getElementById(`${id}-${axis}`);
+                        if (!el) return;
+                        const v = rgb[axis];
+                        const n = Number(v);
+                        el.value =
+                            v !== undefined && v !== null && Number.isFinite(n)
+                                ? String(clampGlitchLinearChannel(n))
+                                : '0';
+                    });
+                    const hexEl = document.getElementById(id);
+                    if (hexEl) {
+                        const cr = clampGlitchLinearChannel(Number(rgb.r) || 0);
+                        const cg = clampGlitchLinearChannel(Number(rgb.g) || 0);
+                        const cb = clampGlitchLinearChannel(Number(rgb.b) || 0);
+                        hexEl.value = this.floatRgbToHexForPicker(cr, cg, cb);
+                    }
+                });
+                if (marker) marker.dataset.active = 'true';
+                window.dispatchEvent(new CustomEvent('skinCreatorGlitchState', { detail: { active: true } }));
+            } else if (useGlitchImport && !canGlitchImport) {
+                if (marker) marker.dataset.active = 'false';
+                window.dispatchEvent(new CustomEvent('skinCreatorGlitchState', { detail: { active: false } }));
+                SKIN_COLOR_INPUT_IDS.forEach((id) => {
+                    const rgb = settings.glitchColors[id];
+                    if (!rgb || typeof rgb !== 'object') return;
+                    const hexEl = document.getElementById(id);
+                    if (hexEl) {
+                        hexEl.value = this.floatRgbToHexForPicker(
+                            Number(rgb.r) || 0,
+                            Number(rgb.g) || 0,
+                            Number(rgb.b) || 0
+                        );
+                        hexEl.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                    ['r', 'g', 'b'].forEach((axis) => {
+                        const el = document.getElementById(`${id}-${axis}`);
+                        if (el) {
+                            el.value = String(
+                                glitchChannelToDisplayByte(Number(rgb[axis]) || 0)
+                            );
+                        }
+                    });
+                });
+            } else {
+                if (marker) marker.dataset.active = 'false';
+                window.dispatchEvent(new CustomEvent('skinCreatorGlitchState', { detail: { active: false } }));
+
+                if (settings.colors) {
+                    Object.entries(settings.colors).forEach(([key, value]) => {
+                        const input = document.getElementById(key);
+                        if (input) {
+                            input.value = value;
+                            input.dispatchEvent(new Event('input'));
+                        }
+                    });
                 }
+            }
 
-                const mapRadius = 525000;
-                currentBaseX = ((gameY - (-mapRadius)) / (mapRadius - (-mapRadius))) * 2000;
-                currentBaseY = 2000 - (((gameX - (-mapRadius)) / (mapRadius - (-mapRadius))) * 2000); 
+            this.scheduleUpdateModelColors(true);
+            return true;
+        } catch (error) {
+            console.error('Error loading skin code:', error);
+            return false;
+        }
+    },
 
-                // Получаем настройки алгоритма и применяем к ползункам
-                const settings = getSettingsForCoords(gameX, gameY);
-                document.getElementById('slideScaleX').value = settings.scX;
-                document.getElementById('slideScaleY').value = settings.scY;
-                document.getElementById('slideOffsetX').value = settings.offX;
-                document.getElementById('slideOffsetY').value = settings.offY;
+    initializeEventListeners() {
+        if (this._listenersAbortController) {
+            this._listenersAbortController.abort();
+        }
+        this._listenersAbortController = new AbortController();
+        const ac = this._listenersAbortController;
 
-                playerMarker.setOpacity(1); 
-                updateMarkerPosition();
-                map.setView([playerMarker.getLatLng().lat, playerMarker.getLatLng().lng], 3); 
+        const modelSelect = document.getElementById('modelSelect');
+        const patternSelect = document.getElementById('pattern');
+        const saveSkin = document.getElementById('saveSkin');
+        const randomizeBtn = document.getElementById('randomizeBtn');
+        const savePresetBtn = document.getElementById('savePresetBtn');
+        const applyBtn = document.getElementById('applyBtn');
+        
+        const colorPickers = {
+            maleDisplayColor: document.getElementById('maleDisplayColor'),
+            markingsColor: document.getElementById('markingsColor'),
+            bodyColor: document.getElementById('bodyColor'),
+            flankColor: document.getElementById('flankColor'),
+            underbellyColor: document.getElementById('underbellyColor'),
+            detail1Color: document.getElementById('detail1Color'),
+            eyesColor: document.getElementById('eyesColor')
+        };
+        
+        window.colorPickers = colorPickers;
+
+        const onGlitchAxisDocument = (e) => {
+            const t = e.target;
+            if (!t || t.tagName !== 'INPUT') return;
+            const id = t.id;
+            if (!id) return;
+            let matched = false;
+            for (let i = 0; i < SKIN_COLOR_INPUT_IDS.length; i++) {
+                const bid = SKIN_COLOR_INPUT_IDS[i];
+                if (id === `${bid}-r` || id === `${bid}-g` || id === `${bid}-b`) {
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) return;
+            if (!this.isGlitchSkinMode()) return;
+            if (e.type === 'input') {
+                this.scheduleUpdateModelColors(false);
+            } else if (e.type === 'change') {
+                this.scheduleUpdateModelColors(true);
+            }
+        };
+        document.addEventListener('input', onGlitchAxisDocument, { capture: true, signal: ac.signal });
+        document.addEventListener('change', onGlitchAxisDocument, { capture: true, signal: ac.signal });
+
+        const onGlitchAxisFocusOut = (e) => {
+            const t = e.target;
+            if (!t || t.tagName !== 'INPUT') return;
+            const id = t.id;
+            let matched = false;
+            for (let i = 0; i < SKIN_COLOR_INPUT_IDS.length; i++) {
+                const bid = SKIN_COLOR_INPUT_IDS[i];
+                if (id === `${bid}-r` || id === `${bid}-g` || id === `${bid}-b`) {
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched || !this.isGlitchSkinMode()) return;
+            this.scheduleUpdateModelColors(true);
+        };
+        document.addEventListener('focusout', onGlitchAxisFocusOut, { capture: true, signal: ac.signal });
+
+        const refreshAfterGlitchUiReady = () => {
+            if (!this.isGlitchSkinMode()) return;
+            this.scheduleUpdateModelColors(true);
+        };
+        window.addEventListener(
+            'skinCreatorGlitchState',
+            (ev) => {
+                if (ev && ev.detail && ev.detail.active) {
+                    requestAnimationFrame(() => refreshAfterGlitchUiReady());
+                }
+            },
+            { signal: ac.signal }
+        );
+
+        Object.entries(colorPickers).forEach(([key, picker]) => {
+            if (picker) {
+                let pickerCommitRaf = null;
+                const schedulePickerCommit = () => {
+                    if (pickerCommitRaf != null) {
+                        cancelAnimationFrame(pickerCommitRaf);
+                    }
+                    pickerCommitRaf = requestAnimationFrame(() => {
+                        pickerCommitRaf = null;
+                        this.syncHexPickerToGlitchFloats(picker.id);
+                        this.scheduleUpdateModelColors(true);
+                    });
+                };
+                const onPickerInput = () => {
+                    this.syncHexPickerToGlitchFloats(picker.id);
+                    if (this.isGlitchSkinMode()) {
+                        this.scheduleUpdateModelColors(false);
+                        return;
+                    }
+                    const m = this._currentSkinManifest;
+                    if (m && m.BodyMaterial && m.BodyMaterial.Textures && m.BodyMaterial.Textures.BaseMask) {
+                        this._scheduleManifestColorPreviewRefresh();
+                    } else {
+                        this.scheduleUpdateModelColors(false);
+                    }
+                };
+                picker.addEventListener('input', onPickerInput, { signal: ac.signal });
+                picker.addEventListener('change', schedulePickerCommit, { signal: ac.signal });
+                picker.addEventListener('blur', schedulePickerCommit, { signal: ac.signal });
             }
         });
-
-        let isGrayscale = false;
-        document.getElementById('btnToggleGrayscale').addEventListener('click', (e) => {
-            isGrayscale = !isGrayscale;
-            e.target.innerText = isGrayscale ? 'Black & white: On' : 'Black & white: Off';
-            e.target.classList.toggle('active');
-            const img = baseMapLayer.getElement();
-            if (img) img.style.filter = isGrayscale ? 'grayscale(100%) brightness(0.7)' : 'none';
-        });
-
-        function updateVisibleCount() {
-            const visibleBtns = document.querySelectorAll('#sidebarLabelsList .sidebar-label-btn:not(.hidden)');
-            document.getElementById('visibleLabelCount').innerText = visibleBtns.length;
+        
+        if (modelSelect) {
+            modelSelect.addEventListener('change', (e) => {
+                this.loadModel(e.target.value);
+            }, { signal: ac.signal });
         }
 
-        document.getElementById('categoryToggles').addEventListener('click', (e) => {
-            if(e.target.classList.contains('nerf-pill')) {
-                const targetId = e.target.getAttribute('data-target');
-                e.target.classList.toggle('active');
-                const isActive = e.target.classList.contains('active');
-                if(isActive) map.addLayer(layers[targetId]);
-                else map.removeLayer(layers[targetId]);
-                
-                const listBtns = document.querySelectorAll(`#sidebarLabelsList .sidebar-label-btn[data-category="${targetId}"]`);
-                listBtns.forEach(btn => { if(isActive) btn.classList.remove('hidden'); else btn.classList.add('hidden'); });
-                updateVisibleCount();
-            }
-        });
+        const animSelect = document.getElementById('skinCreatorAnimationSelect');
+        if (animSelect) {
+            animSelect.addEventListener('change', () => {
+                const idx = parseInt(animSelect.value, 10);
+                if (!Number.isNaN(idx)) {
+                    this.setAnimationClipIndex(idx);
+                }
+            }, { signal: ac.signal });
+        }
+        
+        if (patternSelect) {
+            patternSelect.addEventListener('input', () => {
+                console.log('Pattern changed to:', patternSelect.value);
+                this.updateModelColors();
+            }, { signal: ac.signal });
+        }
 
-        document.getElementById('sidebarLabelsList').addEventListener('click', (e) => {
-            if(e.target.classList.contains('sidebar-label-btn')) {
-                const name = e.target.innerText;
-                const pin = pinData.find(p => p.n === name);
-                if(pin) map.setView([pin.mapY, pin.mapX], 2);
-            }
-        });
+        if (randomizeBtn) {
+            randomizeBtn.addEventListener('click', () => {
+                    if (this.isGlitchSkinMode()) {
+                    const glitchAxes = ['r', 'g', 'b'];
+                    Object.keys(colorPickers).forEach((key) => {
+                        glitchAxes.forEach((axis) => {
+                            const el = document.getElementById(`${key}-${axis}`);
+                            if (el) {
+                                const raw = Math.random() * 20000 - 10000;
+                                el.value = String(clampGlitchLinearChannel(raw).toFixed(2));
+                            }
+                        });
+                    });
+                    this.scheduleUpdateModelColors(true);
+                    return;
+                }
+                Object.values(colorPickers).forEach(picker => {
+                    if (picker) {
+                        const randomColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+                        picker.value = randomColor;
+                        picker.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                });
+                this.updateModelColors();
+            }, { signal: ac.signal });
+        }
 
-        document.getElementById('overlayToggles').addEventListener('click', (e) => {
-            if(e.target.classList.contains('nerf-pill')) {
-                const targetId = e.target.getAttribute('data-target');
-                e.target.classList.toggle('active');
-                if(e.target.classList.contains('active')) {
-                    map.addLayer(overlays[targetId]);
+        const loadPresetBtn = document.getElementById('loadPresetBtn');
+        if (loadPresetBtn) {
+            loadPresetBtn.addEventListener('click', () => {
+                const picked = this._getSelectedPresetBucketName();
+                if (picked) {
+                    this.loadPreset(picked.name, picked.bucket);
                 } else {
-                    map.removeLayer(overlays[targetId]);
+                    this.showModal(
+                        'Error',
+                        'Please select a standard or glitch preset.',
+                        'error',
+                        { confirmText: 'OK' }
+                    );
                 }
-            }
+            }, { signal: ac.signal });
+        }
+
+        const deletePresetBtn = document.getElementById('deletePresetBtn');
+        if (deletePresetBtn) {
+            deletePresetBtn.addEventListener('click', () => {
+                const picked = this._getSelectedPresetBucketName();
+                if (picked) {
+                    this.deletePreset(picked.name, picked.bucket);
+                } else {
+                    this.showModal(
+                        'Error',
+                        'Please select a preset to delete.',
+                        'error',
+                        { confirmText: 'OK' }
+                    );
+                }
+            }, { signal: ac.signal });
+        }
+
+        if (savePresetBtn) {
+            savePresetBtn.addEventListener('click', () => {
+                this.savePreset();
+            }, { signal: ac.signal });
+        }
+
+        this._wirePresetSelectMutex(ac.signal);
+
+        const genderRadios = document.querySelectorAll('input[name="gender"]');
+        genderRadios.forEach(radio => {
+            radio.addEventListener('change', function() {
+                console.log('Gender changed to:', this.value);
+            }, { signal: ac.signal });
         });
-    });
-  </script>
-</body>
-</html>
+
+        if (saveSkin) {
+            saveSkin.addEventListener('click', async () => {
+                const skinData = {
+                    model: modelSelect.value,
+                    colors: {},
+                    pattern: patternSelect.value,
+                    patternVariation: document.getElementById('pattern-variation')?.value || '0',
+                    gender: document.querySelector('input[name="gender"]:checked')?.value || 'male'
+                };
+
+                Object.entries(colorPickers).forEach(([key, picker]) => {
+                    if (picker) {
+                        skinData.colors[key] = picker.value;
+                    }
+                });
+                
+                try {
+                    const savedSkins = JSON.parse(localStorage.getItem('savedSkins') || '[]');
+                    savedSkins.push({
+                        ...skinData,
+                        savedAt: new Date().toISOString()
+                    });
+                    localStorage.setItem('savedSkins', JSON.stringify(savedSkins.slice(-10))); 
+                    
+                    await this.showModal(
+                        'Success',
+                        'Skin saved locally!',
+                        'success',
+                        { confirmText: 'OK' }
+                    );
+                } catch (error) {
+                    console.error('Error saving skin:', error);
+                    await this.showModal(
+                        'Error',
+                        'Failed to save skin. Please try again.',
+                        'error',
+                        { confirmText: 'OK' }
+                    );
+                }
+            }, { signal: ac.signal });
+        }
+
+        const getCodeBtn = document.getElementById('getCodeBtn');
+        const loadCodeBtn = document.getElementById('loadCodeBtn');
+
+        if (getCodeBtn) {
+            getCodeBtn.addEventListener('click', async () => {
+                const code = this.generateSkinCode();
+                await this.showModal(
+                    'Skin Code',
+                    `<div style="word-break: break-all;">Share this code with others:<br><br><code>${code}</code></div>`,
+                    'info',
+                    {
+                        confirmText: 'Copy Code',
+                        showCancel: true
+                    }
+                ).then(shouldCopy => {
+                    if (shouldCopy) {
+                        navigator.clipboard.writeText(code).then(() => {
+                            this.showModal(
+                                'Success',
+                                'Code copied to clipboard!',
+                                'success',
+                                { confirmText: 'OK' }
+                            );
+                        });
+                    }
+                });
+            }, { signal: ac.signal });
+        }
+
+        if (loadCodeBtn) {
+            loadCodeBtn.addEventListener('click', async () => {
+                const result = await this.showModal(
+                    'Load Skin Code',
+                    'Enter the skin code:',
+                    'info',
+                    {
+                        input: true,
+                        placeholder: 'Paste skin code here',
+                        showCancel: true,
+                        confirmText: 'Load'
+                    }
+                );
+
+                if (result) {
+                    const success = this.loadSkinCode(result);
+                    if (success) {
+                        await this.showModal(
+                            'Success',
+                            'Skin loaded successfully!',
+                            'success',
+                            { confirmText: 'OK' }
+                        );
+                    } else {
+                        await this.showModal(
+                            'Error',
+                            'Invalid skin code. Please check the code and try again.',
+                            'error',
+                            { confirmText: 'OK' }
+                        );
+                    }
+                }
+            }, { signal: ac.signal });
+        }
+
+        const debugBtn = document.getElementById('debugBtn');
+        if (debugBtn) {
+            debugBtn.addEventListener('click', () => {
+                this.debugColors();
+            }, { signal: ac.signal });
+        }
+
+        if (applyBtn) {
+            applyBtn.addEventListener('click', async () => {
+                const button = applyBtn;
+                const originalText = button.innerHTML;
+                button.disabled = true;
+                button.innerHTML = '<i class="ri-loader-4-line ri-spin"></i> Applying...';
+
+                try {
+                    await this.applySkin();
+                } finally {
+                    button.disabled = false;
+                    button.innerHTML = originalText;
+                }
+            }, { signal: ac.signal });
+        }
+    },
+
+    updatePresetsDropdown() {
+        const normal = JSON.parse(localStorage.getItem(this.PRESET_KEY)) || {};
+        const glitch = JSON.parse(localStorage.getItem(this.PRESET_KEY_GLITCH)) || {};
+
+        const selN = document.getElementById('presets-select');
+        if (selN) {
+            const curN = selN.value;
+            selN.innerHTML = '<option value="">-- Standard presets --</option>';
+            Object.keys(normal)
+                .sort((a, b) => a.localeCompare(b))
+                .forEach((name) => {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    selN.appendChild(option);
+                });
+            if (normal[curN]) selN.value = curN;
+        } else {
+            console.warn('Presets select element not found');
+        }
+
+        const selG = document.getElementById('presets-select-glitch');
+        if (selG) {
+            const curG = selG.value;
+            selG.innerHTML = '<option value="">-- Glitch presets (Sub+) --</option>';
+            Object.keys(glitch)
+                .sort((a, b) => a.localeCompare(b))
+                .forEach((name) => {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    selG.appendChild(option);
+                });
+            if (glitch[curG]) selG.value = curG;
+        }
+    }
+};
+
+window.initializeSkinCreator = function() {
+    console.log('Initializing Skin Creator...');
+    SkinCreator.cleanup();
+    SkinCreator.init();
+    SkinCreator.initializeEventListeners();
+    SkinCreator.updatePresetsDropdown();
+    console.log('Skin Creator initialized successfully');
+};
