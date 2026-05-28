@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Isle - Creator & NERF Map</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Changa+One&family=Montserrat:wght@400;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #0d120e; font-family: 'Montserrat', sans-serif; }
+        input[type="range"] { width: 100%; accent-color: #ffb300; cursor: pointer; height: 6px; border-radius: 3px; }
+        
+        #modelSelect { width: 100%; background: rgba(0,0,0,0.4); color: #fff; border: 1px solid rgba(255,255,255,0.1); padding: 12px; border-radius: 6px; font-size: 1rem; cursor: pointer; outline: none; backdrop-filter: blur(4px); }
+        #modelSelect option { background: #131a14; color: #fff; padding: 10px; }
+
+        .top-nav-container { 
+            position: absolute; top: 15px; left: 20px; z-index: 9999; display: flex; 
+            background: linear-gradient(135deg, rgba(30, 40, 30, 0.75) 0%, rgba(15, 20, 15, 0.85) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border-radius: 8px; overflow: hidden;
+        }
+        .custom-nav-btn { background: transparent; color: #aaa; border: none; padding: 12px 26px; cursor: pointer; font-weight: bold; text-transform: uppercase; font-size: 0.85rem; transition: all 0.2s ease; outline: none; font-family: 'Montserrat', sans-serif;}
+        .custom-nav-btn:hover { color: #fff; background: rgba(255,255,255,0.05); }
+        .custom-nav-btn.active { background: #ffb300; color: #000; }
+
+        #gameMapWindow { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; display: none; background: #080b08; }
+        #leafletMapContainer { width: 100%; height: 100%; background: #080b08; }
+        
+        .nerf-sidebar { 
+            position: absolute; top: 75px; left: 20px; width: 340px; 
+            background: linear-gradient(135deg, rgba(30, 40, 30, 0.85) 0%, rgba(15, 20, 15, 0.95) 100%); 
+            border: 1px solid rgba(255, 255, 255, 0.1); 
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            border-radius: 12px; padding: 25px 20px; z-index: 1000; box-sizing: border-box; 
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            color: #fff; max-height: calc(100vh - 100px); overflow-y: auto; display: flex; flex-direction: column; gap: 20px;
+        }
+        .nerf-sidebar::-webkit-scrollbar { width: 6px; }
+        .nerf-sidebar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 3px; }
+        
+        .nerf-section-title { font-size: 0.8rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 10px 0; color: #fff; }
+        .nerf-input-row { display: flex; gap: 10px; }
+        .nerf-input { flex: 1; background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255,255,255,0.1); padding: 10px; border-radius: 6px; color: #fff; outline: none; font-family: 'Montserrat', sans-serif; font-size: 0.9rem; }
+        .nerf-btn { background: rgba(255, 255, 255, 0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: all 0.2s; backdrop-filter: blur(4px); }
+        .nerf-btn:hover { background: rgba(255, 255, 255, 0.2); border-color: rgba(255, 255, 255, 0.4); }
+        .nerf-hint { font-size: 0.75rem; color: rgba(255,255,255,0.5); margin-top: 5px; line-height: 1.4; }
+
+        .nerf-pill-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+        .nerf-pill { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); color: #aaa; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 800; cursor: pointer; transition: all 0.2s; font-family: 'Montserrat', sans-serif; text-transform: capitalize; backdrop-filter: blur(4px); }
+        
+        .nerf-pill[data-target="regions"].active { border-color: #4a5c40; color: #a3c9a6; background: rgba(74, 92, 64, 0.4); }
+        .nerf-pill[data-target="outposts"].active { border-color: #6a502c; color: #e3bc84; background: rgba(106, 80, 44, 0.4); }
+        .nerf-pill[data-target="landmarks"].active { border-color: #5c385a; color: #e5b0e8; background: rgba(92, 56, 90, 0.4); }
+        .nerf-pill[data-target="water"].active { border-color: #2b4b52; color: #addcf0; background: rgba(43, 75, 82, 0.4); }
+        
+        .nerf-pill[data-target="patrol"].active { border-color: #fcb5b5; color: #fcb5b5; background: rgba(59, 35, 37, 0.8); }
+        .nerf-pill[data-target="migration"].active { border-color: #c3d6fc; color: #c3d6fc; background: rgba(36, 49, 66, 0.8); }
+        .nerf-pill[data-target="sanctuary"].active { border-color: #e2f2ab; color: #e2f2ab; background: rgba(54, 66, 35, 0.8); }
+        .nerf-pill[data-target="spawns"].active { border-color: #fedfa9; color: #fedfa9; background: rgba(68, 53, 33, 0.8); }
+
+        .map-style-btn { width: 100%; background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; text-align: left; transition: all 0.2s; backdrop-filter: blur(4px); }
+        .map-style-btn.active { border-color: #88aaff; color: #88aaff; background: rgba(136, 170, 255, 0.15); }
+
+        .leaflet-layer-grayscale { filter: grayscale(100%) brightness(0.7); transition: filter 0.5s ease; }
+
+        .nerf-map-label { background: rgba(13, 26, 15, 0.85); border: 1px solid rgba(255,255,255,0.2); color: #ccc; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: bold; white-space: nowrap; cursor: pointer; transition: all 0.2s; font-family: 'Montserrat', sans-serif;}
+        .nerf-map-label:hover { border-color: #ffb300; color: #ffb300; z-index: 1000 !important; }
+
+        .labels-list-container { border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px; display: flex; flex-direction: column; gap: 8px; max-height: 250px; overflow-y: auto; }
+        .labels-list-container::-webkit-scrollbar { width: 4px; }
+        .labels-list-container::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 2px; }
+        .sidebar-label-btn { background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255,255,255,0.05); color: #ccc; padding: 10px 15px; border-radius: 6px; text-align: left; font-family: 'Montserrat', sans-serif; font-size: 0.85rem; font-weight: bold; cursor: pointer; transition: all 0.2s; }
+        .sidebar-label-btn:hover { background: rgba(255, 255, 255, 0.1); color: #fff; border-color: #ffb300; }
+        .hidden { display: none !important; }
+
+        /* БОЛЬШАЯ ТОЧКА МАРКЕРА */
+        .player-marker-pulse { 
+            position: relative; width: 24px; height: 24px; 
+            background: #d84343; border-radius: 50%; pointer-events: none; 
+            border: 2px solid rgba(255,255,255,0.8); 
+            box-shadow: 0 0 10px rgba(0,0,0,0.6); 
+            box-sizing: border-box;
+        }
+        .player-marker-pulse::before, .player-marker-pulse::after { 
+            content: ''; position: absolute; top: -3px; left: -3px; right: -3px; bottom: -3px; 
+            border: 2px solid #d84343; border-radius: 50%; 
+            animation: pulse-ring 2.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite; 
+        }
+        .player-marker-pulse::after { animation-delay: 1.25s; }
+        @keyframes pulse-ring { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(3.5); opacity: 0; } }
+
+        #rightConfigPanel {
+            width: 400px; 
+            background: linear-gradient(135deg, rgba(20, 30, 20, 0.85) 0%, rgba(10, 15, 10, 0.95) 100%);
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            padding: 30px 25px; display: flex; flex-direction: column; gap: 25px; box-sizing: border-box; overflow-y: auto; z-index: 20;
+        }
+
+        #editorControlsBlock {
+            position: relative; z-index: 15; display: flex; flex-direction: column; align-items: center; gap: 12px; 
+            background: linear-gradient(135deg, rgba(30, 40, 30, 0.75) 0%, rgba(15, 20, 15, 0.85) 100%);
+            padding: 15px 25px; border-radius: 12px; 
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+        }
+        
+        .color-row-glass {
+            display: flex; justify-content: space-between; align-items: center; 
+            background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);
+            backdrop-filter: blur(4px);
+        }
+    </style>
+</head>
+<body>
+
+  <div style="display: flex; width: 100vw; height: 100vh; color: #fff; overflow: hidden; position: relative;">
+      
+      <div class="top-nav-container">
+          <button id="btnToggleCreator" class="custom-nav-btn active">Skin Creator</button>
+          <button id="btnToggleMap" class="custom-nav-btn">Map</button>
+      </div>
+
+      <div style="flex: 1; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 30px;">
+          
+          <div id="skinEditorWindow" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5;">
+              <div id="modelViewer" style="width: 100%; height: 100%;"></div>
+          </div>
+
+          <div id="gameMapWindow">
+              <div class="nerf-sidebar">
+                  <div>
+                      <p class="nerf-section-title">Paste coordinates</p>
+                      <div class="nerf-input-row">
+                          <input type="text" id="coordInput" class="nerf-input" placeholder="X, Y, Z or X, Y" autocomplete="off">
+                          <button id="btnFocusMap" class="nerf-btn">Focus</button>
+                      </div>
+                      <p class="nerf-hint">Paste X, Y, Z or X, Y.</p>
+                  </div>
+
+                  <div>
+                      <p class="nerf-section-title">Map style</p>
+                      <button id="btnToggleGrayscale" class="map-style-btn">Black & white: Off</button>
+                  </div>
+
+                  <div>
+                      <p class="nerf-section-title" style="margin-bottom: 12px;">Label categories</p>
+                      <div class="nerf-pill-grid" id="categoryToggles">
+                          <button class="nerf-pill active" data-target="regions">Regions</button>
+                          <button class="nerf-pill active" data-target="outposts">Outposts</button>
+                          <button class="nerf-pill active" data-target="landmarks">Landmarks</button>
+                          <button class="nerf-pill active" data-target="water">Lakes & rivers</button>
+                      </div>
+                  </div>
+
+                  <div>
+                      <p class="nerf-section-title" style="margin-bottom: 12px;">Zone overlays</p>
+                      <div class="nerf-pill-grid" id="overlayToggles">
+                          <button class="nerf-pill" data-target="patrol">Patrol</button>
+                          <button class="nerf-pill" data-target="migration">Migration</button>
+                          <button class="nerf-pill" data-target="sanctuary">Sanctuary</button>
+                          <button class="nerf-pill" data-target="spawns">Spawns</button>
+                      </div>
+                  </div>
+
+                  <div>
+                      <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 10px;">
+                          <p class="nerf-section-title" style="margin: 0;">Visible labels</p>
+                          <span id="visibleLabelCount" style="font-size: 0.8rem; font-weight: bold; color: #aaa;">73</span>
+                      </div>
+                      <div class="labels-list-container" id="sidebarLabelsList"></div>
+                  </div>
+              </div>
+              
+              <div id="leafletMapContainer"></div>
+
+          </div>
+          
+          <div id="editorControlsBlock">
+              <div style="display: flex; gap: 15px;">
+                  <button id="customPauseBtn" style="background: rgba(0,0,0,0.5); color: #fff; border: 1px solid rgba(255,255,255,0.2); padding: 10px 25px; border-radius: 6px; cursor: pointer; font-weight: bold; text-transform: uppercase; font-size: 0.9rem; outline: none; transition: all 0.2s;"><span>PAUSE</span></button>
+                  <button id="randomizeBtn" style="background: #ffb300; color: #000; border: none; padding: 10px 25px; border-radius: 6px; cursor: pointer; font-weight: bold; text-transform: uppercase; font-size: 0.9rem;">RANDOMIZE</button>
+              </div>
+              <div id="skinCreatorAnimationWrap" style="display: flex; align-items: center; gap: 10px;">
+                  <span style="font-size: 0.85rem; color: #ccc;">Animation:</span>
+                  <select id="skinCreatorAnimationSelect" style="background: rgba(0,0,0,0.5); color: #fff; border: 1px solid rgba(255,255,255,0.2); padding: 6px 12px; border-radius: 6px; cursor: pointer; outline: none;"></select>
+              </div>
+          </div>
+      </div>
+
+      <div id="rightConfigPanel">
+          <h2 style="color: #ffb300; margin: 0; text-transform: uppercase; letter-spacing: 1px; font-size: 1.4rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px;">Configuration</h2>
+          <div>
+              <label style="display: block; color: #aaa; margin-bottom: 8px; font-size: 0.85rem; text-transform: uppercase; font-weight: bold;">Species</label>
+              <select id="modelSelect" size="1" onfocus="this.size=8;" onblur="this.size=1;" onchange="this.size=1; this.blur();">
+                  <option value="Allosaurus">Allosaurus</option><option value="Austroraptor">Austroraptor</option><option value="Baryonyx">Baryonyx</option><option value="Beipiaosaurus">Beipiaosaurus</option><option value="Carnotaurus">Carnotaurus</option><option value="Ceratosaurus">Ceratosaurus</option><option value="Deinosuchus">Deinosuchus</option><option value="Diabloceratops">Diabloceratops</option><option value="Dilophosaurus">Dilophosaurus</option><option value="Dryosaurus">Dryosaurus</option><option value="Gallimimus">Gallimimus</option><option value="Herrerasaurus">Herrerasaurus</option><option value="Hypsilophodon">Hypsilophodon</option><option value="Kentrosaurus">Kentrosaurus</option><option value="Maiasaura">Maiasaura</option><option value="Omniraptor">Omniraptor</option><option value="Oviraptor">Oviraptor</option><option value="Pachycephalosaurus">Pachycephalosaurus</option><option value="Pteranodon">Pteranodon</option><option value="Stegosaurus">Stegosaurus</option><option value="Tenontosaurus">Tenontosaurus</option><option value="Triceratops">Triceratops</option><option value="Troodon">Troodon</option><option value="Tyrannosaurus">Tyrannosaurus</option>
+              </select>
+          </div>
+          <div>
+              <label style="display: block; color: #aaa; margin-bottom: 10px; font-size: 0.85rem; text-transform: uppercase; font-weight: bold;">Pattern Style</label>
+              <input type="range" id="pattern" min="0" max="2" value="0" step="1">
+          </div>
+          <select id="age-stage" style="display: none;"><option value="Adult">Adult</option></select>
+          <input type="hidden" id="pattern-variation" value="0"><input type="radio" name="gender" value="male" checked style="display: none;">
+          <h3 style="color: #ffb300; margin: 10px 0 0 0; text-transform: uppercase; font-size: 1.1rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px;">Pigmentation</h3>
+          
+          <div style="display: flex; flex-direction: column; gap: 15px;">
+              <div class="color-row-glass"><span style="color: #ccc;">Body</span><div style="display: flex; align-items: center; gap: 10px;"><div id="bodyPreview" style="width: 16px; height: 16px; border-radius: 4px;"></div><input type="color" id="bodyColor" value="#00ffff" style="border:none; background:none; width:45px; height:30px; cursor:pointer;"></div><input type="hidden" id="bodyColor-r"><input type="hidden" id="bodyColor-g"><input type="hidden" id="bodyColor-b"></div>
+              <div class="color-row-glass"><span style="color: #ccc;">Underbelly</span><div style="display: flex; align-items: center; gap: 10px;"><div id="underbellyPreview" style="width: 16px; height: 16px; border-radius: 4px;"></div><input type="color" id="underbellyColor" value="#00ff00" style="border:none; background:none; width:45px; height:30px; cursor:pointer;"></div><input type="hidden" id="underbellyColor-r"><input type="hidden" id="underbellyColor-g"><input type="hidden" id="underbellyColor-b"></div>
+              <div class="color-row-glass"><span style="color: #ccc;">Markings</span><div style="display: flex; align-items: center; gap: 10px;"><div id="markingsPreview" style="width: 16px; height: 16px; border-radius: 4px;"></div><input type="color" id="markingsColor" value="#ff00ff" style="border:none; background:none; width:45px; height:30px; cursor:pointer;"></div><input type="hidden" id="markingsColor-r"><input type="hidden" id="markingsColor-g"><input type="hidden" id="markingsColor-b"></div>
+              <div class="color-row-glass"><span style="color: #ccc;">Plank</span><div style="display: flex; align-items: center; gap: 10px;"><div id="flankPreview" style="width: 16px; height: 16px; border-radius: 4px;"></div><input type="color" id="flankColor" value="#0000ff" style="border:none; background:none; width:45px; height:30px; cursor:pointer;"></div><input type="hidden" id="flankColor-r"><input type="hidden" id="flankColor-g"><input type="hidden" id="flankColor-b"></div>
+              <div class="color-row-glass"><span style="color: #ccc;">Details</span><div style="display: flex; align-items: center; gap: 10px;"><div id="detail1Preview" style="width: 16px; height: 16px; border-radius: 4px;"></div><input type="color" id="detail1Color" value="#800080" style="border:none; background:none; width:45px; height:30px; cursor:pointer;"></div><input type="hidden" id="detail1Color-r"><input type="hidden" id="detail1Color-g"><input type="hidden" id="detail1Color-b"></div>
+              <div class="color-row-glass"><span style="color: #ccc;">Eyes</span><div style="display: flex; align-items: center; gap: 10px;"><div id="eyesPreview" style="width: 16px; height: 16px; border-radius: 4px;"></div><input type="color" id="eyesColor" value="#ffff00" style="border:none; background:none; width:45px; height:30px; cursor:pointer;"></div><input type="hidden" id="eyesColor-r"><input type="hidden" id="eyesColor-g"><input type="hidden" id="eyesColor-b"></div>
+              <div class="color-row-glass"><span style="color: #ccc;">Male Display</span><div style="display: flex; align-items: center; gap: 10px;"><div id="maleDisplayPreview" style="width: 16px; height: 16px; border-radius: 4px;"></div><input type="color" id="maleDisplayColor" value="#ff0000" style="border:none; background:none; width:45px; height:30px; cursor:pointer;"></div><input type="hidden" id="maleDisplayColor-r"><input type="hidden" id="maleDisplayColor-g"><input type="hidden" id="maleDisplayColor-b"></div>
+          </div>
+          <div style="margin-top: auto; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; gap: 10px;">
+              <span style="font-size: 0.85rem; color: #ffb300; font-weight: bold; text-align: center; text-transform: uppercase;">The Isle Import Code</span>
+              <input type="text" id="isleExportCode" readonly style="width: 100%; background: rgba(0,0,0,0.5); color: #00ffaa; border: 1px solid rgba(255,255,255,0.1); padding: 12px; border-radius: 6px; font-family: monospace; text-align: center; outline: none; backdrop-filter: blur(4px);">
+              <button id="copyIsleCodeBtn" style="width: 100%; background: linear-gradient(135deg, #ffb300, #ff6f00); color: #3e2723; border: none; padding: 14px; border-radius: 6px; font-weight: bold; cursor: pointer;">COPY TO CLIPBOARD</button>
+          </div>
+      </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+  <script src="js/skin-creator.js"></script>
+
+  <script>
+    setTimeout(function() { if (typeof SkinCreator !== 'undefined') SkinCreator.init(); }, 300);
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const patternPrefixes = { "0": "011", "1": "111", "2": "211" };
+        const colorFields = ['underbellyColor', 'bodyColor', 'flankColor', 'markingsColor', 'detail1Color', 'eyesColor', 'maleDisplayColor'];
+
+        function hexToRgb(h) { let r=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h); return r?{r:parseInt(r[1],16),g:parseInt(r[2],16),b:parseInt(r[3],16)}:null; }
+        function fC(id) { let i = document.getElementById(id); return (!i||!i.value)?"000000FF":i.value.replace('#','').toUpperCase()+"FF"; }
+
+        window.handleUserChange = function() {
+            const pVal = document.getElementById('pattern') ? document.getElementById('pattern').value : "0";
+            const prefix = patternPrefixes[pVal] || "011";
+            const body       = fC('bodyColor');
+            const underbelly = fC('underbellyColor');
+            const markings   = fC('markingsColor');
+            const detail     = fC('detail1Color');
+            const display    = fC('maleDisplayColor'); 
+            const finalCode = prefix + body + underbelly + markings + detail + display;
+            
+            if(document.getElementById('isleExportCode')) document.getElementById('isleExportCode').value = finalCode;
+
+            colorFields.forEach(id => {
+                const hi = document.getElementById(id);
+                if (hi && hi.value) {
+                    const rgb = hexToRgb(hi.value);
+                    if(rgb) { document.getElementById(id+'-r').value=rgb.r; document.getElementById(id+'-g').value=rgb.g; document.getElementById(id+'-b').value=rgb.b; }
+                    const pr = document.getElementById(id.replace('Color','')+'Preview');
+                    if(pr) { pr.style.backgroundColor = hi.value; pr.style.boxShadow = `0 0 15px ${hi.value}`; }
+                }
+            });
+            if(typeof SkinCreator!=='undefined' && typeof SkinCreator.updateModelColors === 'function') SkinCreator.updateModelColors();
+        }
+
+        document.getElementById('randomizeBtn').addEventListener('click', e => {
+            e.preventDefault();
+            colorFields.forEach(id => {
+                let r=Math.floor(Math.random()*256), g=Math.floor(Math.random()*256), b=Math.floor(Math.random()*256);
+                document.getElementById(id+'-r').value=r; document.getElementById(id+'-g').value=g; document.getElementById(id+'-b').value=b;
+                let cI = document.getElementById(id); if(cI) cI.value = "#"+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+            });
+            window.handleUserChange();
+        });
+
+        document.getElementById('skinCreatorAnimationSelect').addEventListener('change', e => {
+            let idx = parseInt(e.target.value, 10); if(!isNaN(idx) && typeof SkinCreator!=='undefined') SkinCreator.setAnimationClipIndex(idx);
+        });
+        document.body.addEventListener('change', e => { if(e.target.id==='modelSelect' && typeof SkinCreator!=='undefined') { SkinCreator.loadModel(e.target.value); setTimeout(window.handleUserChange, 400); }});
+        document.body.addEventListener('input', e => { if(['pattern', ...colorFields].includes(e.target.id)) window.handleUserChange(); });
+        document.body.addEventListener('click', e => {
+            if(e.target.id==='copyIsleCodeBtn') { document.getElementById('isleExportCode').select(); document.execCommand('copy'); e.target.innerText="COPIED!"; setTimeout(()=>e.target.innerText="COPY TO CLIPBOARD", 1200); }
+            let btn = e.target.closest('#customPauseBtn');
+            if(btn) { 
+                if(typeof SkinCreator!=='undefined' && SkinCreator.controls) SkinCreator.controls.autoRotate = !SkinCreator.controls.autoRotate; 
+                let span = btn.querySelector('span');
+                if(span) span.innerText = span.innerText==='PAUSE'?'PLAY':'PAUSE'; 
+                btn.style.transform = 'scale(0.95)';
+                setTimeout(()=>btn.style.transform = 'scale(1)', 100);
+            }
+        });
+        setTimeout(window.handleUserChange, 1200);
+
+        const btnCr = document.getElementById('btnToggleCreator'), btnMp = document.getElementById('btnToggleMap');
+        const sEd = document.getElementById('skinEditorWindow'), gMp = document.getElementById('gameMapWindow');
+        const rCp = document.getElementById('rightConfigPanel'), eCb = document.getElementById('editorControlsBlock');
+
+        btnCr.addEventListener('click', () => { btnCr.classList.add('active'); btnMp.classList.remove('active'); sEd.style.display='block'; gMp.style.display='none'; rCp.style.display='flex'; eCb.style.display='flex'; });
+        btnMp.addEventListener('click', () => { btnMp.classList.add('active'); btnCr.classList.remove('active'); sEd.style.display='none'; gMp.style.display='block'; rCp.style.display='none'; eCb.style.display='none'; setTimeout(()=>map.invalidateSize(), 100); });
+
+        const map = L.map('leafletMapContainer', { crs: L.CRS.Simple, minZoom: -2, maxZoom: 4, zoomControl: false, attributionControl: false });
+        L.control.zoom({ position: 'topright' }).addTo(map);
+
+        const bounds = [[0, 0], [2000, 2000]];
+        const baseMapLayer = L.imageOverlay('images/world-map.png', bounds, { zIndex: 1 }).addTo(map);
+        map.fitBounds(bounds);
+
+        let playerMarker = L.marker([1000, 1000], { icon: L.divIcon({ html: '<div class="player-marker-pulse"></div>', className: '', iconSize: [24,24], iconAnchor: [12, 12] }) }).addTo(map);
+        playerMarker.setOpacity(0);
+
+        const layers = { water: L.layerGroup().addTo(map), landmarks: L.layerGroup().addTo(map), regions: L.layerGroup().addTo(map), outposts: L.layerGroup().addTo(map) };
+
+        const pinData = [
+            { n: "North Lake", c: "water", top: 20.01953125, left: 76.0009765625 },
+            { n: "Highlands Lake", c: "water", top: 41.015625, left: 46.142578125 },
+            { n: "North River", c: "water", top: 24.4140625, left: 80.56640625 },
+            { n: "Water Access Lake", c: "water", top: 28.4423828125, left: 55.7861328125 },
+            { n: "Water Access River", c: "water", top: 35.0341796875, left: 63.8427734375 },
+            { n: "The Fork", c: "landmarks", top: 43.8232421875, left: 67.5048828125 },
+            { n: "Roaring Falls", c: "landmarks", top: 35.888671875, left: 77.880859375 },
+            { n: "East Lake", c: "water", top: 38.9404296875, left: 86.669921875 },
+            { n: "The Delta", c: "water", top: 55.908203125, left: 66.89453125 },
+            { n: "Aviary Dam", c: "landmarks", top: 54.931640625, left: 43.212890625 },
+            { n: "The Estuary", c: "water", top: 65.91796875, left: 64.208984375 },
+            { n: "Eastern Swamp", c: "regions", top: 69.3359375, left: 57.373046875 },
+            { n: "Western Swamp", c: "regions", top: 71.77734375, left: 46.9970703125 },
+            { n: "South River", c: "water", top: 60.05859375, left: 34.912109375 },
+            { n: "South Lake", c: "water", top: 68.84765625, left: 33.69140625 },
+            { n: "Site B14", c: "outposts", top: 15.625, left: 66.5283203125 },
+            { n: "Site D15", c: "outposts", top: 23.4375, left: 68.84765625 },
+            { n: "Site E14", c: "outposts", top: 28.80859375, left: 65.673828125 },
+            { n: "Site E17", c: "outposts", top: 28.3203125, left: 76.66015625 },
+            { n: "Site F16", c: "outposts", top: 31.1279296875, left: 72.8759765625 },
+            { n: "Site F19", c: "outposts", top: 31.982421875, left: 86.42578125 },
+            { n: "Site F21", c: "outposts", top: 32.3486328125, left: 92.4072265625 },
+            { n: "Site H20", c: "outposts", top: 37.7197265625, left: 88.9892578125 },
+            { n: "Site K17", c: "outposts", top: 50.6591796875, left: 76.416015625 },
+            { n: "Site K15", c: "outposts", top: 52.24609375, left: 70.068359375 },
+            { n: "Site I12", c: "outposts", top: 41.3818359375, left: 56.884765625 },
+            { n: "Site J10-1", c: "outposts", top: 43.45703125, left: 48.2177734375 },
+            { n: "Site J10-2", c: "outposts", top: 45.5322265625, left: 47.119140625 },
+            { n: "Site K8", c: "outposts", top: 53.466796875, left: 40.6494140625 },
+            { n: "Site K7-1", c: "outposts", top: 50.4150390625, left: 36.62109375 },
+            { n: "Site K7-2", c: "outposts", top: 53.1005859375, left: 36.9873046875 },
+            { n: "Site K6", c: "outposts", top: 50.1708984375, left: 32.71484375 },
+            { n: "Site I6", c: "outposts", top: 43.701171875, left: 29.541015625 },
+            { n: "Site N9", c: "outposts", top: 66.162109375, left: 43.9453125 },
+            { n: "Site N11", c: "outposts", top: 63.4765625, left: 52.24609375 },
+            { n: "Eastern Dock", c: "outposts", top: 26.7333984375, left: 90.087890625 },
+            { n: "Western Dock", c: "outposts", top: 73.73046875, left: 14.404296875 },
+            { n: "Northern Paddock", c: "regions", top: 20.3857421875, left: 80.322265625 },
+            { n: "Eastern Paddock", c: "regions", top: 37.59765625, left: 82.1533203125 },
+            { n: "Southern Paddock", c: "regions", top: 74.3408203125, left: 20.8740234375 },
+            { n: "Aviary", c: "regions", top: 58.88671875, left: 46.6796875 },
+            { n: "A.1", c: "landmarks", top: 53.7109375, left: 47.9736328125 },
+            { n: "A.2", c: "landmarks", top: 57.861328125, left: 52.001953125 },
+            { n: "A.3", c: "landmarks", top: 62.6220703125, left: 50.537109375 },
+            { n: "A.6", c: "landmarks", top: 55.5419921875, left: 42.48046875 },
+            { n: "Split Rock", c: "landmarks", top: 41.748046875, left: 72.021484375 },
+            { n: "Tidal Pools", c: "landmarks", top: 46.142578125, left: 85.693359375 },
+            { n: "Kissing Rocks", c: "landmarks", top: 44.43359375, left: 37.59765625 },
+            { n: "Highlands Underpass", c: "landmarks", top: 45.654296875, left: 46.630859375 },
+            { n: "Highlands Valley", c: "landmarks", top: 40.283203125, left: 37.841796875 },
+            { n: "Snakehead Lagoon", c: "landmarks", top: 66.89453125, left: 28.076171875 },
+            { n: "The Gorge", c: "landmarks", top: 54.5654296875, left: 38.6962890625 },
+            { n: "Key Hole", c: "landmarks", top: 23.5595703125, left: 29.296875 },
+            { n: "Caldera", c: "landmarks", top: 27.7099609375, left: 71.533203125 },
+            { n: "Stone Archway", c: "landmarks", top: 20.1416015625, left: 36.2548828125 },
+            { n: "Swamp Valley", c: "landmarks", top: 71.77734375, left: 40.4052734375 },
+            { n: "The Sandbars", c: "landmarks", top: 60.1806640625, left: 25.2685546875 },
+            { n: "Razor Rocks", c: "landmarks", top: 83.740234375, left: 52.24609375 },
+            { n: "Northern Point", c: "landmarks", top: 6.8359375, left: 84.716796875 },
+            { n: "Southern Point", c: "landmarks", top: 82.51953125, left: 30.517578125 },
+            { n: "Seaview Plateau", c: "landmarks", top: 58.837890625, left: 63.96484375 },
+            { n: "The Highlands", c: "regions", top: 39.794921875, left: 41.9921875 },
+            { n: "Northern Plains", c: "regions", top: 20.751953125, left: 77.880859375 },
+            { n: "Southern Plains", c: "regions", top: 73.6083984375, left: 23.92578125 },
+            { n: "Northern Jungle", c: "regions", top: 24.7802734375, left: 60.9130859375 },
+            { n: "Southern Jungle", c: "regions", top: 66.0400390625, left: 34.66796875 },
+            { n: "Central Jungle", c: "regions", top: 44.921875, left: 58.2275390625 },
+            { n: "Eastern Jungle", c: "regions", top: 41.6259765625, left: 80.9326171875 },
+            { n: "The Caldera", c: "regions", top: 27.7099609375, left: 71.533203125 },
+            { n: "The Swamps", c: "regions", top: 70.80078125, left: 53.1005859375 },
+            { n: "The Delta (Region)", c: "regions", top: 55.908203125, left: 66.89453125 },
+            { n: "The Aviary (Region)", c: "regions", top: 58.88671875, left: 46.6796875 },
+            { n: "West Rail", c: "landmarks", top: 50.048828125, left: 27.34375 }
+        ];
+
+        pinData.forEach(p => {
+            const finalY = 2000 - (2000 * (p.top / 100)); 
+            const finalX = 2000 * (p.left / 100);       
+            p.mapY = finalY; p.mapX = finalX; 
+            L.marker([finalY, finalX], { icon: L.divIcon({ html: `<button class="nerf-map-label">${p.n}</button>`, className: '', iconAnchor: [40, 10] }) }).addTo(layers[p.c]);
+        });
+
+        const overlays = {
+            patrol: L.imageOverlay('images/patrol-layer.png', bounds, { zIndex: 10 }),
+            migration: L.imageOverlay('images/migration-layer.png', bounds, { zIndex: 10 }),
+            sanctuary: L.imageOverlay('images/sanctuary-layer.png', bounds, { zIndex: 10 }),
+            spawns: L.imageOverlay('images/spawns-layer.png', bounds, { zIndex: 10 })
+        };
+
+        // -----------------------------------------------------------
+        // ИНТЕРПОЛЯЦИЯ IDW (Inverse Distance Weighting)
+        // -----------------------------------------------------------
+
+        const anchors = [
+            // Новая точка (Дамба Water Access)
+            { x: -282531, y: 65442, scX: 0.828, scY: 0.868, offX: 8.426, offY: -10.330 },
+            // 1 скрин: Дамба / Water Access (восточнее)
+            { x: -220995, y: 129670, scX: 0.836, scY: 0.887, offX: 9.074, offY: -16.000 },
+            // 2 скрин: Изгиб реки The Fork
+            { x: -115651, y: 208994, scX: 0.821, scY: 0.922, offX: 9.074, offY: -16.000 },
+            // 3 скрин: Split Rock
+            { x: -62574, y: 178606, scX: 0.819, scY: 0.924, offX: 7.778, offY: -4.660 },
+            // 4 скрин: Узкая часть реки
+            { x: -44580, y: 169867, scX: 0.817, scY: 0.936, offX: 7.778, offY: -4.660 },
+            // Базовый центр карты
+            { x: 0, y: 0, scX: 0.823, scY: 0.917, offX: 8.426, offY: -10.330 }
+        ];
+
+        function getSettingsForCoords(gameX, gameY) {
+            let totalWeight = 0;
+            let wScX = 0, wScY = 0, wOffX = 0, wOffY = 0;
+
+            for (let a of anchors) {
+                let dist = Math.sqrt(Math.pow(gameX - a.x, 2) + Math.pow(gameY - a.y, 2));
+                if (dist < 1) return { scX: a.scX, scY: a.scY, offX: a.offX, offY: a.offY };
+
+                let weight = 1 / Math.pow(dist, 2); 
+                wScX += a.scX * weight;
+                wScY += a.scY * weight;
+                wOffX += a.offX * weight;
+                wOffY += a.offY * weight;
+                totalWeight += weight;
+            }
+
+            return {
+                scX: wScX / totalWeight,
+                scY: wScY / totalWeight,
+                offX: wOffX / totalWeight,
+                offY: wOffY / totalWeight
+            };
+        }
+
+        document.getElementById('btnFocusMap').addEventListener('click', (e) => {
+            if(e) e.preventDefault();
+            const val = document.getElementById('coordInput').value.trim();
+            let parsed = val.replace(/,/g, '');
+            const pts = parsed.match(/-?\d+(\.\d+)?/g);
+            
+            if(pts && pts.length >= 2) {
+                let gameX = parseFloat(pts[0]);
+                let gameY = parseFloat(pts[1]);
+                
+                if (Math.abs(gameX) < 2000 && Math.abs(gameY) < 2000) {
+                    gameX *= 1000;
+                    gameY *= 1000;
+                }
+
+                const mapRadius = 525000;
+                let currentBaseX = ((gameY - (-mapRadius)) / (mapRadius - (-mapRadius))) * 2000;
+                let currentBaseY = 2000 - (((gameX - (-mapRadius)) / (mapRadius - (-mapRadius))) * 2000); 
+
+                const settings = getSettingsForCoords(gameX, gameY);
+
+                let finalX = 1000 + (currentBaseX - 1000) * settings.scX + settings.offX;
+                let finalY = 1000 + (currentBaseY - 1000) * settings.scY + settings.offY;
+
+                if(!isNaN(finalX) && !isNaN(finalY)) { 
+                    playerMarker.setOpacity(1); 
+                    playerMarker.setLatLng([finalY, finalX]); 
+                    map.setView([finalY, finalX], 3); 
+                }
+            }
+        });
+
+        let isGrayscale = false;
+        document.getElementById('btnToggleGrayscale').addEventListener('click', (e) => {
+            isGrayscale = !isGrayscale;
+            e.target.innerText = isGrayscale ? 'Black & white: On' : 'Black & white: Off';
+            e.target.classList.toggle('active');
+            const img = baseMapLayer.getElement();
+            if (img) img.style.filter = isGrayscale ? 'grayscale(100%) brightness(0.7)' : 'none';
+        });
+
+        function updateVisibleCount() {
+            const visibleBtns = document.querySelectorAll('#sidebarLabelsList .sidebar-label-btn:not(.hidden)');
+            document.getElementById('visibleLabelCount').innerText = visibleBtns.length;
+        }
+
+        document.getElementById('categoryToggles').addEventListener('click', (e) => {
+            if(e.target.classList.contains('nerf-pill')) {
+                const targetId = e.target.getAttribute('data-target');
+                e.target.classList.toggle('active');
+                const isActive = e.target.classList.contains('active');
+                if(isActive) map.addLayer(layers[targetId]);
+                else map.removeLayer(layers[targetId]);
+                
+                const listBtns = document.querySelectorAll(`#sidebarLabelsList .sidebar-label-btn[data-category="${targetId}"]`);
+                listBtns.forEach(btn => { if(isActive) btn.classList.remove('hidden'); else btn.classList.add('hidden'); });
+                updateVisibleCount();
+            }
+        });
+
+        document.getElementById('sidebarLabelsList').addEventListener('click', (e) => {
+            if(e.target.classList.contains('sidebar-label-btn')) {
+                const name = e.target.innerText;
+                const pin = pinData.find(p => p.n === name);
+                if(pin) map.setView([pin.mapY, pin.mapX], 2);
+            }
+        });
+
+        document.getElementById('overlayToggles').addEventListener('click', (e) => {
+            if(e.target.classList.contains('nerf-pill')) {
+                const targetId = e.target.getAttribute('data-target');
+                e.target.classList.toggle('active');
+                if(e.target.classList.contains('active')) {
+                    map.addLayer(overlays[targetId]);
+                } else {
+                    map.removeLayer(overlays[targetId]);
+                }
+            }
+        });
+    });
+  </script>
+</body>
+</html>
