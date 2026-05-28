@@ -1,0 +1,109 @@
+{
+    "Name": "Hypsilophodon",
+    "BodyMaterial": {
+        "Textures": {
+            "AdultPatterns": [
+                "Textures/T_Hypsilophodon_Adult_Pattern_1_Male.png",
+                "Textures/T_Hypsilophodon_Adult_Pattern_2_Male.png",
+                "Textures/T_Hypsilophodon_Adult_Pattern_3_Male.png"
+            ],
+            "HatchlingPattern": "Textures/T_Hypsilophodon_Hatchling_Pattern.png",
+            "JuvenilePattern": "Textures/T_Hypsilophodon_Juvenile_Pattern.png",
+            "AlbedoMap": "Textures/T_Hypsilophodon_Albedo.png",
+            "BaseMask": "Textures/T_Hypsilophodon_M.png"
+        },
+        "Paramters": {
+            "BlendMode": 1,
+            "ShadingModel": 2,
+            "Colors": {
+                "Color1_RedLayer": {
+                    "R": 0.035601,
+                    "G": 0.056128,
+                    "B": 0.162029,
+                    "A": 1.0,
+                    "Hex": "354370"
+                },
+                "Color2_GreenLayer": {
+                    "R": 0.076185,
+                    "G": 0.076185,
+                    "B": 0.078187,
+                    "A": 1.0,
+                    "Hex": "4E4E4F"
+                },
+                "Color3_BlueLayer": {
+                    "R": 0.533333,
+                    "G": 0.164706,
+                    "B": 0.019608,
+                    "A": 1.0,
+                    "Hex": "C17126"
+                },
+                "Color4_CyanLayer": {
+                    "R": 0.639216,
+                    "G": 0.427451,
+                    "B": 0.058824,
+                    "A": 1.0,
+                    "Hex": "D2AF44"
+                },
+                "Color5_MagentaLayer": {
+                    "R": 0.025187,
+                    "G": 0.0185,
+                    "B": 0.011612,
+                    "A": 1.0,
+                    "Hex": "2C251C"
+                },
+                "Color6_YellowLayer": {
+                    "R": 0.637597,
+                    "G": 0.584079,
+                    "B": 0.412543,
+                    "A": 1.0,
+                    "Hex": "D1C9AC"
+                },
+                "Detail_Normal_Intensity": {
+                    "R": 2.0,
+                    "G": 2.0,
+                    "B": 1.0,
+                    "A": 1.0,
+                    "Hex": "FFFFFF"
+                }
+            },
+            "Scalars": {
+                "IsFemale": 0.0,
+                "GrowthAmount": 1.0,
+                "Detail_Scale": 12.0,
+                "Wet_Roughness": 0.28,
+                "CarcassGoreTiling": 0.2,
+                "LowFood": 0.0,
+                "LowHealth": 0.0,
+                "MouthGore": 0.0,
+                "MudAmount": 0.0,
+                "RottenCarcassGore": 0.0,
+                "RefractionDepthBias": 0.0
+            },
+            "Switches": {
+                "IsOpacity": true,
+                "UseSkinSystem": true
+            },
+            "Properties": {
+                "PhysMaterial": {
+                    "ObjectName": "PhysicalMaterial'PM_Flesh'",
+                    "ObjectPath": "/Game/TheIsle/MaterialLibrary/PhysicalMaterials/PM_Flesh.0"
+                },
+                "bHasStaticPermutationResource": true,
+                "BasePropertyOverrides": {
+                    "bOverride_BlendMode": true,
+                    "BlendMode": "EBlendMode::BLEND_Masked",
+                    "ShadingModel": "EMaterialShadingModel::MSM_Subsurface",
+                    "OpacityMaskClipValue": 0.33
+                },
+                "bIncludedInBaseGame": true
+            },
+            "HasTopDiffuse": false,
+            "HasTopNormals": false,
+            "HasTopSpecularMasks": false,
+            "HasTopEmissive": false,
+            "IsTranslucent": false,
+            "IsNull": false
+        }
+    },
+    "Model": "Hypsilophodon.glb"
+}

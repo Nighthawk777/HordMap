@@ -1,0 +1,105 @@
+{
+    "Name": "Herrerasaurus",
+    "BodyMaterial": {
+        "Textures": {
+            "AdultPatterns": [
+                "Textures/Herrera_Adult_Pattern.png",
+                "Textures/Herrera_Adult_Pattern_2.png",
+                "Textures/T_Herrerasaurus_Adult_Pattern_3.png"
+            ],
+            "HatchlingPattern": "Textures/Herrera_Hatch_Pattern.png",
+            "JuvenilePattern": "Textures/Herrera_Juvie_Pattern.png",
+            "AlbedoMap": "Textures/T_Herrerasaurus_Albedo.png",
+            "BaseMask": "Textures/T_Herrerasaurus_M.png"
+        },
+        "Paramters": {
+            "BlendMode": 0,
+            "ShadingModel": 2,
+            "Colors": {
+                "ClawColor": {
+                    "R": 0.35,
+                    "G": 0.252261,
+                    "B": 0.175,
+                    "A": 1.0,
+                    "Hex": "A08A74"
+                },
+                "Color1_RedLayer": {
+                    "R": 0.298039,
+                    "G": 0.090196,
+                    "B": 0.094118,
+                    "A": 1.0,
+                    "Hex": "955556"
+                },
+                "Color2_GreenLayer": {
+                    "R": 0.4,
+                    "G": 0.364706,
+                    "B": 0.223529,
+                    "A": 1.0,
+                    "Hex": "AAA382"
+                },
+                "Color3_BlueLayer": {
+                    "R": 0.168627,
+                    "G": 0.211765,
+                    "B": 0.07451,
+                    "A": 1.0,
+                    "Hex": "727F4D"
+                },
+                "Color4_CyanLayer": {
+                    "R": 0.431373,
+                    "G": 0.545098,
+                    "B": 0.113725,
+                    "A": 1.0,
+                    "Hex": "B0C35F"
+                },
+                "Color5_MagentaLayer": {
+                    "R": 0.070588,
+                    "G": 0.098039,
+                    "B": 0.066667,
+                    "A": 1.0,
+                    "Hex": "4B5849"
+                },
+                "Detail_Normal_Intensity": {
+                    "R": 2.0,
+                    "G": 2.0,
+                    "B": 1.0,
+                    "A": 1.0,
+                    "Hex": "FFFFFF"
+                }
+            },
+            "Scalars": {
+                "GrowthAmount": 1.0,
+                "Detail_Scale": 12.0,
+                "Wet_Roughness": 0.28,
+                "CarcassGoreTiling": 0.2,
+                "LowFood": 0.0,
+                "LowHealth": 0.0,
+                "MouthGore": 0.0,
+                "MudAmount": 0.0,
+                "RottenCarcassGore": 0.0,
+                "RefractionDepthBias": 0.0
+            },
+            "Switches": {
+                "UseSkinSystem": true
+            },
+            "Properties": {
+                "PhysMaterial": {
+                    "ObjectName": "PhysicalMaterial'PM_Flesh'",
+                    "ObjectPath": "/Game/TheIsle/MaterialLibrary/PhysicalMaterials/PM_Flesh.0"
+                },
+                "bHasStaticPermutationResource": true,
+                "BasePropertyOverrides": {
+                    "ShadingModel": "EMaterialShadingModel::MSM_Subsurface",
+                    "OpacityMaskClipValue": 0.33
+                },
+                "bIncludedInBaseGame": true
+            },
+            "HasTopDiffuse": false,
+            "HasTopNormals": false,
+            "HasTopSpecularMasks": false,
+            "HasTopEmissive": false,
+            "IsTranslucent": false,
+            "IsNull": false
+        }
+    },
+    "Model": "Herrerasaurus.glb"
+}

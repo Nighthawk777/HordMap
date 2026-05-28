@@ -1,0 +1,93 @@
+{
+    "Name": "Triceratops",
+    "BodyMaterial": {
+        "Textures": {
+            "AdultPatterns": [
+                "Textures/T_Triceratops_Adult_Pattern_1.png",
+                "Textures/T_Triceratops_Adult_Pattern_2.png",
+                "Textures/T_Triceratops_Adult_Pattern_3.png"
+            ],
+            "HatchlingPattern": "Textures/T_Triceratops_Hatchling_Pattern.png",
+            "JuvenilePattern": "Textures/T_Triceratops_Juvenile_Pattern.png",
+            "AlbedoMap": "Textures/T_Triceratops_Albedo.png",
+            "BaseMask": "Textures/T_Triceratops_Detail_M.png"
+        },
+        "Paramters": {
+            "BlendMode": 0,
+            "ShadingModel": 2,
+            "Colors": {
+                "Color1_RedLayer": {
+                    "R": 0.686686,
+                    "G": 0.147027,
+                    "B": 0.035601,
+                    "A": 1.0,
+                    "Hex": "D86B35"
+                },
+                "Color2_GreenLayer": {
+                    "R": 0.520996,
+                    "G": 0.391573,
+                    "B": 0.208637,
+                    "A": 1.0,
+                    "Hex": "BFA87E"
+                },
+                "Color3_BlueLayer": {
+                    "R": 0.141263,
+                    "G": 0.097587,
+                    "B": 0.072272,
+                    "A": 1.0,
+                    "Hex": "69584C"
+                },
+                "Color4_CyanLayer": {
+                    "R": 0.40724,
+                    "G": 0.215861,
+                    "B": 0.0865,
+                    "A": 1.0,
+                    "Hex": "AB8053"
+                },
+                "Color5_MagentaLayer": {
+                    "R": 0.05448,
+                    "G": 0.048172,
+                    "B": 0.039546,
+                    "A": 1.0,
+                    "Hex": "423E38"
+                },
+                "Color6_YellowLayer": {
+                    "R": 0.0,
+                    "G": 0.0,
+                    "B": 0.0,
+                    "A": 1.0,
+                    "Hex": "000000"
+                },
+                "Detail_Normal_Intensity": {
+                    "R": 2.0,
+                    "G": 2.0,
+                    "B": 1.0,
+                    "A": 1.0,
+                    "Hex": "FFFFFF"
+                }
+            },
+            "Scalars": {
+                "Detail_Scale": 12.0,
+                "RefractionDepthBias": 0.0
+            },
+            "Switches": {
+                "UseSkinSystem": true
+            },
+            "Properties": {
+                "bHasStaticPermutationResource": true,
+                "BasePropertyOverrides": {
+                    "ShadingModel": "EMaterialShadingModel::MSM_Subsurface",
+                    "OpacityMaskClipValue": 0.33
+                },
+                "bIncludedInBaseGame": true
+            },
+            "HasTopDiffuse": false,
+            "HasTopNormals": false,
+            "HasTopSpecularMasks": false,
+            "HasTopEmissive": false,
+            "IsTranslucent": false,
+            "IsNull": false
+        }
+    },
+    "Model": "Triceratops.glb"
+}

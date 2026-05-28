@@ -1,0 +1,109 @@
+{
+    "Name": "Dryosaurus",
+    "BodyMaterial": {
+        "Textures": {
+            "AdultPatterns": [
+                "Textures/T_Dryosaurus_Adult_Pattern_1.png",
+                "Textures/T_Dryosaurus_Adult_Pattern_2.png",
+                "Textures/T_Dryosaurus_Adult_Pattern_3.png"
+            ],
+            "HatchlingPattern": "Textures/T_Dryosaurus_Hatchling_Pattern.png",
+            "JuvenilePattern": "Textures/T_Dyosaurus_Juvenile_Pattern.png",
+            "AlbedoMap": "Textures/T_Dryosaurus_Albedo.png",
+            "BaseMask": "Textures/T_Dryosaurus_Detail_M.png"
+        },
+        "Paramters": {
+            "BlendMode": 0,
+            "ShadingModel": 2,
+            "Colors": {
+                "MouthColor": {
+                    "R": 0.6,
+                    "G": 0.334571,
+                    "B": 0.269202,
+                    "A": 1.0,
+                    "Hex": "CC9D8E"
+                },
+                "Color1_RedLayer": {
+                    "R": 0.045791,
+                    "G": 0.084094,
+                    "B": 0.15,
+                    "A": 1.0,
+                    "Hex": "3C526C"
+                },
+                "Color2_GreenLayer": {
+                    "R": 0.35,
+                    "G": 0.221573,
+                    "B": 0.130672,
+                    "A": 1.0,
+                    "Hex": "A08265"
+                },
+                "Color3_BlueLayer": {
+                    "R": 0.056193,
+                    "G": 0.065,
+                    "B": 0.029773,
+                    "A": 1.0,
+                    "Hex": "434830"
+                },
+                "Color4_CyanLayer": {
+                    "R": 0.15,
+                    "G": 0.15,
+                    "B": 0.028904,
+                    "A": 1.0,
+                    "Hex": "6C6C2F"
+                },
+                "Color5_MagentaLayer": {
+                    "R": 0.017272,
+                    "G": 0.025,
+                    "B": 0.01797,
+                    "A": 1.0,
+                    "Hex": "232B24"
+                },
+                "Color6_YellowLayer": {
+                    "R": 0.0,
+                    "G": 0.0,
+                    "B": 0.0,
+                    "A": 1.0,
+                    "Hex": "000000"
+                },
+                "Detail_Normal_Intensity": {
+                    "R": 2.0,
+                    "G": 2.0,
+                    "B": 1.0,
+                    "A": 1.0,
+                    "Hex": "FFFFFF"
+                }
+            },
+            "Scalars": {
+                "GrowthAmount": 1.0,
+                "Detail_Scale": 12.0,
+                "LowFood": 0.0,
+                "LowHealth": 0.0,
+                "MouthGore": 0.0,
+                "MudAmount": 0.0,
+                "RefractionDepthBias": 0.0
+            },
+            "Switches": {
+                "UseSkinSystem": true
+            },
+            "Properties": {
+                "PhysMaterial": {
+                    "ObjectName": "PhysicalMaterial'PM_Flesh'",
+                    "ObjectPath": "/Game/TheIsle/MaterialLibrary/PhysicalMaterials/PM_Flesh.0"
+                },
+                "bHasStaticPermutationResource": true,
+                "BasePropertyOverrides": {
+                    "ShadingModel": "EMaterialShadingModel::MSM_Subsurface",
+                    "OpacityMaskClipValue": 0.33
+                },
+                "bIncludedInBaseGame": true
+            },
+            "HasTopDiffuse": false,
+            "HasTopNormals": false,
+            "HasTopSpecularMasks": false,
+            "HasTopEmissive": false,
+            "IsTranslucent": false,
+            "IsNull": false
+        }
+    },
+    "Model": "Dryosaurus.glb"
+}

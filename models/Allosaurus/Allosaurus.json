@@ -1,0 +1,93 @@
+{
+    "Name": "Allosaurus",
+    "BodyMaterial": {
+        "Textures": {
+            "AdultPatterns": [
+                "Textures/T_Allosaurus_Adult_Pattern_1.png",
+                "Textures/T_Allosaurus_Adult_Pattern_2.png",
+                "Textures/T_Allosaurus_Adult_Pattern_3.png"
+            ],
+            "HatchlingPattern": "Textures/T_Allosaurus_Hatchling_Pattern.png",
+            "JuvenilePattern": "Textures/T_Allosaurus_Juvenile_Pattern.png",
+            "AlbedoMap": "Textures/T_Allosaurus_Albedo.png",
+            "BaseMask": "Textures/T_Allosaurus_M.png"
+        },
+        "Paramters": {
+            "BlendMode": 0,
+            "ShadingModel": 2,
+            "Colors": {
+                "ClawColor": {
+                    "R": 0.03125,
+                    "G": 0.027994,
+                    "B": 0.020345,
+                    "A": 1.0,
+                    "Hex": "312E27"
+                },
+                "Color1_RedLayer": {
+                    "R": 0.458333,
+                    "G": 0.128906,
+                    "B": 0.156995,
+                    "A": 1.0,
+                    "Hex": "B5646E"
+                },
+                "Color2_GreenLayer": {
+                    "R": 1.0,
+                    "G": 0.804129,
+                    "B": 0.552083,
+                    "A": 1.0,
+                    "Hex": "FFE8C4"
+                },
+                "Color3_BlueLayer": {
+                    "R": 0.401042,
+                    "G": 0.289943,
+                    "B": 0.221409,
+                    "A": 1.0,
+                    "Hex": "AA9382"
+                },
+                "Color4_CyanLayer": {
+                    "R": 0.880208,
+                    "G": 0.56147,
+                    "B": 0.246079,
+                    "A": 1.0,
+                    "Hex": "F2C688"
+                },
+                "Color5_MagentaLayer": {
+                    "R": 0.090196,
+                    "G": 0.082353,
+                    "B": 0.070588,
+                    "A": 1.0,
+                    "Hex": "55514B"
+                },
+                "Color6_YellowLayer": {
+                    "R": 1.0,
+                    "G": 0.804129,
+                    "B": 0.552083,
+                    "A": 1.0,
+                    "Hex": "FFE8C4"
+                }
+            },
+            "Scalars": {
+                "Detail_Scale": 12.0,
+                "RefractionDepthBias": 0.0
+            },
+            "Switches": {
+                "UseSkinSystem": true
+            },
+            "Properties": {
+                "bHasStaticPermutationResource": true,
+                "BasePropertyOverrides": {
+                    "ShadingModel": "EMaterialShadingModel::MSM_Subsurface",
+                    "OpacityMaskClipValue": 0.33
+                },
+                "bIncludedInBaseGame": true
+            },
+            "HasTopDiffuse": false,
+            "HasTopNormals": false,
+            "HasTopSpecularMasks": false,
+            "HasTopEmissive": false,
+            "IsTranslucent": false,
+            "IsNull": false
+        }
+    },
+    "Model": "Allosaurus.glb"
+}

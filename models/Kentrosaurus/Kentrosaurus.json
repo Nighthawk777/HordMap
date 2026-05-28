@@ -1,0 +1,105 @@
+{
+    "Name": "Kentrosaurus",
+    "BodyMaterial": {
+        "Textures": {
+            "AdultPatterns": [
+                "Textures/T_Kentrosaurus_Adult_Pattern_1.png",
+                "Textures/T_Kentrosaurus_Adult_Pattern_2.png",
+                "Textures/T_Kentrosaurus_Adult_Pattern_3.png"
+            ],
+            "HatchlingPattern": "Textures/T_Kentrosaurus_Hatchling_Pattern.png",
+            "JuvenilePattern": "Textures/T_Kentrosaurus_Juvie_Pattern.png",
+            "AlbedoMap": "Textures/T_Kentrosaurus_Mask_Albedo.png",
+            "BaseMask": "Textures/T_Kentrosaurus_Adult_Mask_TMC.png"
+        },
+        "Paramters": {
+            "BlendMode": 0,
+            "ShadingModel": 2,
+            "Colors": {
+                "MouthColor": {
+                    "R": 0.376262,
+                    "G": 0.114435,
+                    "B": 0.068478,
+                    "A": 1.0,
+                    "Hex": "A55F4A"
+                },
+                "Color1_RedLayer": {
+                    "R": 0.571125,
+                    "G": 0.107023,
+                    "B": 0.027321,
+                    "A": 1.0,
+                    "Hex": "C75C2E"
+                },
+                "Color2_GreenLayer": {
+                    "R": 0.496933,
+                    "G": 0.412543,
+                    "B": 0.309469,
+                    "A": 1.0,
+                    "Hex": "BBAC97"
+                },
+                "Color3_BlueLayer": {
+                    "R": 0.109462,
+                    "G": 0.0865,
+                    "B": 0.068478,
+                    "A": 1.0,
+                    "Hex": "5D534A"
+                },
+                "Color4_CyanLayer": {
+                    "R": 0.462077,
+                    "G": 0.300544,
+                    "B": 0.109462,
+                    "A": 1.0,
+                    "Hex": "B5955D"
+                },
+                "Color5_MagentaLayer": {
+                    "R": 0.027321,
+                    "G": 0.023153,
+                    "B": 0.016807,
+                    "A": 1.0,
+                    "Hex": "2E2A23"
+                },
+                "Color6_YellowLayer": {
+                    "R": 0.0,
+                    "G": 0.0,
+                    "B": 0.0,
+                    "A": 1.0,
+                    "Hex": "000000"
+                },
+                "Detail_Normal_Intensity": {
+                    "R": 2.0,
+                    "G": 2.0,
+                    "B": 1.0,
+                    "A": 1.0,
+                    "Hex": "FFFFFF"
+                }
+            },
+            "Scalars": {
+                "GrowthAmount": 1.0,
+                "Detail_Scale": 12.0,
+                "RefractionDepthBias": 0.0
+            },
+            "Switches": {
+                "UseSkinSystem": true
+            },
+            "Properties": {
+                "PhysMaterial": {
+                    "ObjectName": "PhysicalMaterial'PM_Flesh'",
+                    "ObjectPath": "/Game/TheIsle/MaterialLibrary/PhysicalMaterials/PM_Flesh.0"
+                },
+                "bHasStaticPermutationResource": true,
+                "BasePropertyOverrides": {
+                    "ShadingModel": "EMaterialShadingModel::MSM_Subsurface",
+                    "OpacityMaskClipValue": 0.33
+                },
+                "bIncludedInBaseGame": true
+            },
+            "HasTopDiffuse": false,
+            "HasTopNormals": false,
+            "HasTopSpecularMasks": false,
+            "HasTopEmissive": false,
+            "IsTranslucent": false,
+            "IsNull": false
+        }
+    },
+    "Model": "Kentrosaurus.glb"
+}

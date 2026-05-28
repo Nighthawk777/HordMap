@@ -1,0 +1,79 @@
+{
+    "Name": "Maiasaura",
+    "BodyMaterial": {
+        "Textures": {
+            "AdultPatterns": [
+                "Textures/T_Maiasaura_Pattern_Adult_1.png",
+                "Textures/T_Maiasaura_Pattern_Adult_2.png",
+                "Textures/T_Maiasaura_Pattern_Adult_3.png"
+            ],
+            "HatchlingPattern": "Textures/T_Maiasaura_Pattern_Hatchling.png",
+            "JuvenilePattern": "Textures/T_Maiasaura_Pattern_Juvie.png",
+            "AlbedoMap": "Textures/T_Maiasaura_Albedo.png",
+            "BaseMask": "Textures/T_Maiasaura_M.png"
+        },
+        "Paramters": {
+            "BlendMode": 0,
+            "ShadingModel": 2,
+            "Colors": {
+                "Color1_RedLayer": {
+                    "R": 0.417885,
+                    "G": 0.225232,
+                    "B": 0.126236,
+                    "A": 1.0,
+                    "Hex": "AD8363"
+                },
+                "Color2_GreenLayer": {
+                    "R": 0.989583,
+                    "G": 0.622552,
+                    "B": 0.309245,
+                    "A": 1.0,
+                    "Hex": "FECF97"
+                },
+                "Color3_BlueLayer": {
+                    "R": 0.59,
+                    "G": 0.29567,
+                    "B": 0.144427,
+                    "A": 1.0,
+                    "Hex": "CA946A"
+                },
+                "Color4_CyanLayer": {
+                    "R": 0.828125,
+                    "G": 0.46375,
+                    "B": 0.165625,
+                    "A": 1.0,
+                    "Hex": "EBB671"
+                },
+                "Color5_MagentaLayer": {
+                    "R": 0.114583,
+                    "G": 0.070508,
+                    "B": 0.057292,
+                    "A": 1.0,
+                    "Hex": "5F4B43"
+                }
+            },
+            "Scalars": {
+                "Detail_Scale": 10.0,
+                "RefractionDepthBias": 0.0
+            },
+            "Switches": {
+                "UseSkinSystem": true
+            },
+            "Properties": {
+                "bHasStaticPermutationResource": true,
+                "BasePropertyOverrides": {
+                    "ShadingModel": "EMaterialShadingModel::MSM_Subsurface",
+                    "OpacityMaskClipValue": 0.33
+                },
+                "bIncludedInBaseGame": true
+            },
+            "HasTopDiffuse": false,
+            "HasTopNormals": false,
+            "HasTopSpecularMasks": false,
+            "HasTopEmissive": false,
+            "IsTranslucent": false,
+            "IsNull": false
+        }
+    },
+    "Model": "Maiasaura.glb"
+}

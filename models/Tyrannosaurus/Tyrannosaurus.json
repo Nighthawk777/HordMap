@@ -1,0 +1,101 @@
+{
+    "Name": "Tyrannosaurus",
+    "BodyMaterial": {
+        "Textures": {
+            "AdultPatterns": [
+                "Textures/T_Tyrannosaurus_Adult_Pattern_1.png",
+                "Textures/T_Tyrannosaurus_Adult_Pattern_2.png",
+                "Textures/T_Tyrannosaurus_Adult_Pattern_3.png"
+            ],
+            "HatchlingPattern": "Textures/T_Tyrannosaurus_Hatchling_Pattern.png",
+            "JuvenilePattern": "Textures/T_Tyrannosaurus_Juvie_Pattern.png",
+            "AlbedoMap": "Textures/T_Tyrannosaurus_Albedo.png",
+            "BaseMask": "Textures/T_Tyrannosaurus_Detail_M.png"
+        },
+        "Paramters": {
+            "BlendMode": 0,
+            "ShadingModel": 2,
+            "Colors": {
+                "MouthColor": {
+                    "R": 0.2,
+                    "G": 0.097917,
+                    "B": 0.099721,
+                    "A": 1.0,
+                    "Hex": "7C5859"
+                },
+                "Color1_RedLayer": {
+                    "R": 0.15,
+                    "G": 0.038438,
+                    "B": 0.0225,
+                    "A": 1.0,
+                    "Hex": "6C3729"
+                },
+                "Color2_GreenLayer": {
+                    "R": 0.65,
+                    "G": 0.455,
+                    "B": 0.26,
+                    "A": 1.0,
+                    "Hex": "D3B48B"
+                },
+                "Color3_BlueLayer": {
+                    "R": 0.1,
+                    "G": 0.067793,
+                    "B": 0.035,
+                    "A": 1.0,
+                    "Hex": "594934"
+                },
+                "Color4_CyanLayer": {
+                    "R": 0.25,
+                    "G": 0.17751,
+                    "B": 0.1,
+                    "A": 1.0,
+                    "Hex": "897559"
+                },
+                "Color5_MagentaLayer": {
+                    "R": 0.035,
+                    "G": 0.028448,
+                    "B": 0.02275,
+                    "A": 1.0,
+                    "Hex": "342F29"
+                },
+                "Color6_YellowLayer": {
+                    "R": 0.0,
+                    "G": 0.0,
+                    "B": 0.0,
+                    "A": 1.0,
+                    "Hex": "000000"
+                },
+                "Detail_Normal_Intensity": {
+                    "R": 2.0,
+                    "G": 2.0,
+                    "B": 1.0,
+                    "A": 1.0,
+                    "Hex": "FFFFFF"
+                }
+            },
+            "Scalars": {
+                "GrowthAmount": 1.0,
+                "Detail_Scale": 12.0,
+                "RefractionDepthBias": 0.0
+            },
+            "Switches": {
+                "UseSkinSystem": true
+            },
+            "Properties": {
+                "bHasStaticPermutationResource": true,
+                "BasePropertyOverrides": {
+                    "ShadingModel": "EMaterialShadingModel::MSM_Subsurface",
+                    "OpacityMaskClipValue": 0.33
+                },
+                "bIncludedInBaseGame": true
+            },
+            "HasTopDiffuse": false,
+            "HasTopNormals": false,
+            "HasTopSpecularMasks": false,
+            "HasTopEmissive": false,
+            "IsTranslucent": false,
+            "IsNull": false
+        }
+    },
+    "Model": "Tyrannosaurus.glb"
+}

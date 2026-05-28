@@ -1,0 +1,103 @@
+{
+    "Name": "Stegosaurus",
+    "BodyMaterial": {
+        "Textures": {
+            "AdultPatterns": [
+                "Textures/T_Stegosaurus_Adult_Pattern_1.png",
+                "Textures/T_Stegosaurus_Adult_Pattern_2.png",
+                "Textures/T_Stegosaurus_Adult_Pattern_3.png"
+            ],
+            "HatchlingPattern": "Textures/T_Stegosaurus_Hatchling_Pattern.png",
+            "JuvenilePattern": "Textures/T_Stegosaurus_Juvenile_Pattern.png",
+            "AlbedoMap": "Textures/T_Stegosaurus_Albedo.png",
+            "BaseMask": "Textures/T_Stegosaurus_Detail_M.png"
+        },
+        "Paramters": {
+            "BlendMode": 0,
+            "ShadingModel": 2,
+            "Colors": {
+                "Color1_RedLayer": {
+                    "R": 0.25,
+                    "G": 0.083333,
+                    "B": 0.05,
+                    "A": 1.0,
+                    "Hex": "89513F"
+                },
+                "Color2_GreenLayer": {
+                    "R": 0.2,
+                    "G": 0.153719,
+                    "B": 0.105785,
+                    "A": 1.0,
+                    "Hex": "7C6D5B"
+                },
+                "Color3_BlueLayer": {
+                    "R": 0.1,
+                    "G": 0.1,
+                    "B": 0.035,
+                    "A": 1.0,
+                    "Hex": "595934"
+                },
+                "Color4_CyanLayer": {
+                    "R": 0.4,
+                    "G": 0.236171,
+                    "B": 0.123404,
+                    "A": 1.0,
+                    "Hex": "AA8562"
+                },
+                "Color5_MagentaLayer": {
+                    "R": 0.03,
+                    "G": 0.03,
+                    "B": 0.03,
+                    "A": 1.0,
+                    "Hex": "303030"
+                },
+                "Color6_YellowLayer": {
+                    "R": 0.0,
+                    "G": 0.0,
+                    "B": 0.0,
+                    "A": 1.0,
+                    "Hex": "000000"
+                },
+                "Detail_Normal_Intensity": {
+                    "R": 2.0,
+                    "G": 2.0,
+                    "B": 1.0,
+                    "A": 1.0,
+                    "Hex": "FFFFFF"
+                }
+            },
+            "Scalars": {
+                "GrowthAmount": 1.0,
+                "Detail_Scale": 12.0,
+                "Wet_Roughness": 0.28,
+                "LowFood": 0.0,
+                "LowHealth": 0.0,
+                "MouthGore": 0.0,
+                "MudAmount": 0.0,
+                "RefractionDepthBias": 0.0
+            },
+            "Switches": {
+                "UseSkinSystem": true
+            },
+            "Properties": {
+                "PhysMaterial": {
+                    "ObjectName": "PhysicalMaterial'PM_Flesh'",
+                    "ObjectPath": "/Game/TheIsle/MaterialLibrary/PhysicalMaterials/PM_Flesh.0"
+                },
+                "bHasStaticPermutationResource": true,
+                "BasePropertyOverrides": {
+                    "ShadingModel": "EMaterialShadingModel::MSM_Subsurface",
+                    "OpacityMaskClipValue": 0.33
+                },
+                "bIncludedInBaseGame": true
+            },
+            "HasTopDiffuse": false,
+            "HasTopNormals": false,
+            "HasTopSpecularMasks": false,
+            "HasTopEmissive": false,
+            "IsTranslucent": false,
+            "IsNull": false
+        }
+    },
+    "Model": "Stegosaurus.glb"
+}

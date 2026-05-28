@@ -1,0 +1,102 @@
+{
+    "Name": "Beipiaosaurus",
+    "BodyMaterial": {
+        "Textures": {
+            "AdultPatterns": [
+                "Textures/T_Beipiaosaurus_Pattern_Adult_1.png",
+                "Textures/T_Beipiaosaurus_Pattern_Adult_2.png",
+                "Textures/T_Beipiaosaurus_Pattern_Adult_3.png"
+            ],
+            "HatchlingPattern": "Textures/T_Beipiaosaurus_Pattern_Hatchling.png",
+            "JuvenilePattern": "Textures/T_Beipiaosaurus_Pattern_Juvie.png",
+            "AlbedoMap": "Textures/T_Beipiaosaurus_Adult_Albedo.png",
+            "BaseMask": "Textures/T_Beipiaosaurus_M.png"
+        },
+        "Paramters": {
+            "BlendMode": 1,
+            "ShadingModel": 2,
+            "Colors": {
+                "Color1_RedLayer": {
+                    "R": 0.887923,
+                    "G": 0.514918,
+                    "B": 0.090842,
+                    "A": 1.0,
+                    "Hex": "F2BE55"
+                },
+                "Color2_GreenLayer": {
+                    "R": 0.035294,
+                    "G": 0.023529,
+                    "B": 0.023529,
+                    "A": 1.0,
+                    "Hex": "342A2A"
+                },
+                "Color3_BlueLayer": {
+                    "R": 0.082353,
+                    "G": 0.082353,
+                    "B": 0.101961,
+                    "A": 1.0,
+                    "Hex": "51515A"
+                },
+                "Color4_CyanLayer": {
+                    "R": 0.384314,
+                    "G": 0.380392,
+                    "B": 0.309804,
+                    "A": 1.0,
+                    "Hex": "A7A697"
+                },
+                "Color5_MagentaLayer": {
+                    "R": 0.160784,
+                    "G": 0.160784,
+                    "B": 0.207843,
+                    "A": 1.0,
+                    "Hex": "70707E"
+                },
+                "Color6_YellowLayer": {
+                    "R": 0.036458,
+                    "G": 0.036458,
+                    "B": 0.036458,
+                    "A": 1.0,
+                    "Hex": "353535"
+                },
+                "Detail_Normal_Intensity": {
+                    "R": 2.0,
+                    "G": 2.0,
+                    "B": 1.0,
+                    "A": 1.0,
+                    "Hex": "FFFFFF"
+                }
+            },
+            "Scalars": {
+                "IsFemale": 0.0,
+                "GrowthAmount": 1.0,
+                "Detail_Scale": 12.0,
+                "RefractionDepthBias": 0.0
+            },
+            "Switches": {
+                "IsOpacity": true,
+                "UseSkinSystem": true
+            },
+            "Properties": {
+                "PhysMaterial": {
+                    "ObjectName": "PhysicalMaterial'PM_Flesh'",
+                    "ObjectPath": "/Game/TheIsle/MaterialLibrary/PhysicalMaterials/PM_Flesh.0"
+                },
+                "bHasStaticPermutationResource": true,
+                "BasePropertyOverrides": {
+                    "bOverride_BlendMode": true,
+                    "BlendMode": "EBlendMode::BLEND_Masked",
+                    "ShadingModel": "EMaterialShadingModel::MSM_Subsurface",
+                    "OpacityMaskClipValue": 0.33
+                },
+                "bIncludedInBaseGame": true
+            },
+            "HasTopDiffuse": false,
+            "HasTopNormals": false,
+            "HasTopSpecularMasks": false,
+            "HasTopEmissive": false,
+            "IsTranslucent": false,
+            "IsNull": false
+        }
+    },
+    "Model": "Beipiaosaurus.glb"
+}

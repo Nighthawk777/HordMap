@@ -1,0 +1,112 @@
+{
+    "Name": "Pteranodon",
+    "BodyMaterial": {
+        "Textures": {
+            "AdultPatterns": [
+                "Textures/T_Pteranodon_Adult_Pattern_1.png",
+                "Textures/T_Pteranodon_Adult_Pattern_2.png",
+                "Textures/T_Pteranodon_Adult_Pattern_3.png"
+            ],
+            "HatchlingPattern": "Textures/T_Pteranodon_Hatcling_Pattern.png",
+            "JuvenilePattern": "Textures/T_Pteranodon_Juvenile_Pattern.png",
+            "AlbedoMap": "Textures/T_Pteranodon_Albedo.png",
+            "BaseMask": "Textures/T_Pteranodon_Detail_M.png"
+        },
+        "Paramters": {
+            "BlendMode": 0,
+            "ShadingModel": 2,
+            "Colors": {
+                "MouthColor": {
+                    "R": 0.05339,
+                    "G": 0.05435,
+                    "B": 0.05448,
+                    "A": 1.0,
+                    "Hex": "414242"
+                },
+                "ClawColor": {
+                    "R": 0.05,
+                    "G": 0.038419,
+                    "B": 0.033334,
+                    "A": 1.0,
+                    "Hex": "3F3733"
+                },
+                "Color1_RedLayer": {
+                    "R": 0.4,
+                    "G": 0.362264,
+                    "B": 0.245283,
+                    "A": 1.0,
+                    "Hex": "AAA288"
+                },
+                "Color2_GreenLayer": {
+                    "R": 0.5,
+                    "G": 0.436633,
+                    "B": 0.341584,
+                    "A": 1.0,
+                    "Hex": "BCB19E"
+                },
+                "Color3_BlueLayer": {
+                    "R": 0.15,
+                    "G": 0.115278,
+                    "B": 0.054167,
+                    "A": 1.0,
+                    "Hex": "6C5F42"
+                },
+                "Color4_CyanLayer": {
+                    "R": 0.75,
+                    "G": 0.43125,
+                    "B": 0.1125,
+                    "A": 1.0,
+                    "Hex": "E1B05E"
+                },
+                "Color5_MagentaLayer": {
+                    "R": 0.035,
+                    "G": 0.03,
+                    "B": 0.025,
+                    "A": 1.0,
+                    "Hex": "34302B"
+                },
+                "Detail_Normal_Intensity": {
+                    "R": 2.0,
+                    "G": 2.0,
+                    "B": 1.0,
+                    "A": 1.0,
+                    "Hex": "FFFFFF"
+                }
+            },
+            "Scalars": {
+                "GrowthAmount": 1.0,
+                "Detail_Scale": 10.0,
+                "Wet_Roughness": 0.28,
+                "CarcassGoreTiling": 0.2,
+                "LowFood": 0.0,
+                "LowHealth": 0.0,
+                "MouthGore": 0.0,
+                "MudAmount": 0.0,
+                "RottenCarcassGore": 0.0,
+                "RefractionDepthBias": 0.0
+            },
+            "Switches": {
+                "UseSkinSystem": true
+            },
+            "Properties": {
+                "PhysMaterial": {
+                    "ObjectName": "PhysicalMaterial'PM_Flesh'",
+                    "ObjectPath": "/Game/TheIsle/MaterialLibrary/PhysicalMaterials/PM_Flesh.0"
+                },
+                "bHasStaticPermutationResource": true,
+                "BasePropertyOverrides": {
+                    "ShadingModel": "EMaterialShadingModel::MSM_Subsurface",
+                    "OpacityMaskClipValue": 0.33
+                },
+                "bIncludedInBaseGame": true
+            },
+            "HasTopDiffuse": false,
+            "HasTopNormals": false,
+            "HasTopSpecularMasks": false,
+            "HasTopEmissive": false,
+            "IsTranslucent": false,
+            "IsNull": false
+        }
+    },
+    "Model": "Pteranodon.glb"
+}

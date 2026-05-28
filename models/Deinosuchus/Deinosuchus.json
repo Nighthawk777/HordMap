@@ -1,0 +1,113 @@
+{
+    "Name": "Deinosuchus",
+    "BodyMaterial": {
+        "Textures": {
+            "AdultPatterns": [
+                "Textures/T_Deinosuchus_Adult_Pattern_M.png",
+                "Textures/T_Deino_Adult_Pattern_2.png",
+                "Textures/T_Deinosuchus_Adult_Pattern_3.png"
+            ],
+            "HatchlingPattern": "Textures/T_Deino_Hatchling_Pattern.png",
+            "JuvenilePattern": "Textures/T_Deinosuchus_Juvie_Pattern.png",
+            "AlbedoMap": "Textures/T_Deinosuchus_Albedo.png",
+            "BaseMask": "Textures/T_Deinosuchus_Detail_M.png"
+        },
+        "Paramters": {
+            "BlendMode": 0,
+            "ShadingModel": 2,
+            "Colors": {
+                "TeethColor": {
+                    "R": 0.45,
+                    "G": 0.3675,
+                    "B": 0.2025,
+                    "A": 1.0,
+                    "Hex": "B3A37C"
+                },
+                "MouthColor": {
+                    "R": 0.3,
+                    "G": 0.172007,
+                    "B": 0.112719,
+                    "A": 1.0,
+                    "Hex": "95735E"
+                },
+                "Color1_RedLayer": {
+                    "R": 0.1,
+                    "G": 0.034375,
+                    "B": 0.025,
+                    "A": 1.0,
+                    "Hex": "59342B"
+                },
+                "Color2_GreenLayer": {
+                    "R": 0.35,
+                    "G": 0.29391,
+                    "B": 0.175,
+                    "A": 1.0,
+                    "Hex": "A09474"
+                },
+                "Color3_BlueLayer": {
+                    "R": 0.05,
+                    "G": 0.05,
+                    "B": 0.05,
+                    "A": 1.0,
+                    "Hex": "3F3F3F"
+                },
+                "Color4_CyanLayer": {
+                    "R": 0.15,
+                    "G": 0.106197,
+                    "B": 0.0525,
+                    "A": 1.0,
+                    "Hex": "6C5C41"
+                },
+                "Color5_MagentaLayer": {
+                    "R": 0.015,
+                    "G": 0.015,
+                    "B": 0.015,
+                    "A": 1.0,
+                    "Hex": "202020"
+                },
+                "Color6_YellowLayer": {
+                    "R": 0.0,
+                    "G": 0.0,
+                    "B": 0.0,
+                    "A": 1.0,
+                    "Hex": "000000"
+                },
+                "Detail_Normal_Intensity": {
+                    "R": 2.0,
+                    "G": 2.0,
+                    "B": 1.0,
+                    "A": 1.0,
+                    "Hex": "FFFFFF"
+                }
+            },
+            "Scalars": {
+                "GrowthAmount": 1.0,
+                "Detail_Scale": 12.0,
+                "MouthGore": 0.0,
+                "RefractionDepthBias": 0.0
+            },
+            "Switches": {
+                "UseSkinSystem": true
+            },
+            "Properties": {
+                "PhysMaterial": {
+                    "ObjectName": "PhysicalMaterial'PM_Flesh'",
+                    "ObjectPath": "/Game/TheIsle/MaterialLibrary/PhysicalMaterials/PM_Flesh.0"
+                },
+                "bHasStaticPermutationResource": true,
+                "BasePropertyOverrides": {
+                    "ShadingModel": "EMaterialShadingModel::MSM_Subsurface",
+                    "OpacityMaskClipValue": 0.33
+                },
+                "bIncludedInBaseGame": true
+            },
+            "HasTopDiffuse": false,
+            "HasTopNormals": false,
+            "HasTopSpecularMasks": false,
+            "HasTopEmissive": false,
+            "IsTranslucent": false,
+            "IsNull": false
+        }
+    },
+    "Model": "Deinosuchus.glb"
+}

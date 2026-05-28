@@ -1,0 +1,86 @@
+{
+    "Name": "Dilophosaurus",
+    "BodyMaterial": {
+        "Textures": {
+            "AdultPatterns": [
+                "Textures/T_Dilophosaurus_Adult_Pattern_Default.png",
+                "Textures/T_Dilophosaurus_Adult_Pattern_2.png",
+                "Textures/T_Dilophosaurus_Adult_Pattern_3.png"
+            ],
+            "HatchlingPattern": "Textures/T_Dilophosaurus_Hatchling_Pattern.png",
+            "JuvenilePattern": "Textures/T_Dilophosaurus_Juvenile_Pattern.png",
+            "AlbedoMap": "Textures/T_Dilo_Base_Albedo.png",
+            "BaseMask": "Textures/T_Dilophosaurus_M.png"
+        },
+        "Paramters": {
+            "BlendMode": 0,
+            "ShadingModel": 2,
+            "Colors": {
+                "MouthColor": {
+                    "R": 0.06,
+                    "G": 0.086664,
+                    "B": 0.1,
+                    "A": 1.0,
+                    "Hex": "455359"
+                },
+                "Color1_RedLayer": {
+                    "R": 0.8,
+                    "G": 0.266667,
+                    "B": 0.117647,
+                    "A": 1.0,
+                    "Hex": "E88D60"
+                },
+                "Color2_GreenLayer": {
+                    "R": 0.337255,
+                    "G": 0.266667,
+                    "B": 0.2,
+                    "A": 1.0,
+                    "Hex": "9D8D7C"
+                },
+                "Color3_BlueLayer": {
+                    "R": 0.356863,
+                    "G": 0.14902,
+                    "B": 0.117647,
+                    "A": 1.0,
+                    "Hex": "A16C60"
+                },
+                "Color4_CyanLayer": {
+                    "R": 0.529412,
+                    "G": 0.27451,
+                    "B": 0.188235,
+                    "A": 1.0,
+                    "Hex": "C18F78"
+                },
+                "Color5_MagentaLayer": {
+                    "R": 0.137255,
+                    "G": 0.070588,
+                    "B": 0.070588,
+                    "A": 1.0,
+                    "Hex": "674B4B"
+                }
+            },
+            "Scalars": {
+                "RefractionDepthBias": 0.0
+            },
+            "Switches": {
+                "IsOpacity": true,
+                "UseSkinSystem": true
+            },
+            "Properties": {
+                "bHasStaticPermutationResource": true,
+                "BasePropertyOverrides": {
+                    "ShadingModel": "EMaterialShadingModel::MSM_Subsurface",
+                    "OpacityMaskClipValue": 0.33
+                },
+                "bIncludedInBaseGame": true
+            },
+            "HasTopDiffuse": false,
+            "HasTopNormals": false,
+            "HasTopSpecularMasks": false,
+            "HasTopEmissive": false,
+            "IsTranslucent": false,
+            "IsNull": false
+        }
+    },
+    "Model": "Dilophosaurus.glb"
+}

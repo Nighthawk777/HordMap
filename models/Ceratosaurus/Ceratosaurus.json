@@ -1,0 +1,83 @@
+{
+    "Name": "Ceratosaurus",
+    "BodyMaterial": {
+        "Textures": {
+            "AdultPatterns": [
+                "Textures/T_Ceratosaurus_Adult_Pattern_1.png",
+                "Textures/T_Ceratosaurus_Adult_Pattern_2.png",
+                "Textures/T_Ceratosaurus_Adult_Pattern_3.png"
+            ],
+            "HatchlingPattern": "Textures/T_Ceratosaurus_Hatchling_Pattern.png",
+            "JuvenilePattern": "Textures/T_Ceratosaurus_Juvenile_Pattern.png",
+            "AlbedoMap": "Textures/T_Cerato_Adult_Albedo.png",
+            "BaseMask": "Textures/T_Cerato_Adult_Mouth-Teeth-Claws.png"
+        },
+        "Paramters": {
+            "BlendMode": 0,
+            "ShadingModel": 2,
+            "Colors": {
+                "Color1_RedLayer": {
+                    "R": 1.0,
+                    "G": 0.239216,
+                    "B": 0.0,
+                    "A": 1.0,
+                    "Hex": "FF8600"
+                },
+                "Color2_GreenLayer": {
+                    "R": 1.0,
+                    "G": 0.666667,
+                    "B": 0.4,
+                    "A": 1.0,
+                    "Hex": "FFD6AA"
+                },
+                "Color3_BlueLayer": {
+                    "R": 0.545098,
+                    "G": 0.27451,
+                    "B": 0.14902,
+                    "A": 1.0,
+                    "Hex": "C38F6C"
+                },
+                "Color4_CyanLayer": {
+                    "R": 0.796079,
+                    "G": 0.443137,
+                    "B": 0.25098,
+                    "A": 1.0,
+                    "Hex": "E7B289"
+                },
+                "Color5_MagentaLayer": {
+                    "R": 0.184314,
+                    "G": 0.094118,
+                    "B": 0.05098,
+                    "A": 1.0,
+                    "Hex": "775640"
+                }
+            },
+            "Scalars": {
+                "Detail_Scale": 12.0,
+                "RefractionDepthBias": 0.0
+            },
+            "Switches": {
+                "UseSkinSystem": true
+            },
+            "Properties": {
+                "PhysMaterial": {
+                    "ObjectName": "PhysicalMaterial'PM_Flesh'",
+                    "ObjectPath": "/Game/TheIsle/MaterialLibrary/PhysicalMaterials/PM_Flesh.0"
+                },
+                "bHasStaticPermutationResource": true,
+                "BasePropertyOverrides": {
+                    "ShadingModel": "EMaterialShadingModel::MSM_Subsurface",
+                    "OpacityMaskClipValue": 0.33
+                },
+                "bIncludedInBaseGame": true
+            },
+            "HasTopDiffuse": false,
+            "HasTopNormals": false,
+            "HasTopSpecularMasks": false,
+            "HasTopEmissive": false,
+            "IsTranslucent": false,
+            "IsNull": false
+        }
+    },
+    "Model": "Ceratosaurus.glb"
+}

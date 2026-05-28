@@ -1,0 +1,92 @@
+{
+    "Name": "Carnotaurus",
+    "BodyMaterial": {
+        "Textures": {
+            "AdultPatterns": [
+                "Textures/T_Carno_Adult_Male_Pattern_1.png",
+                "Textures/T_Carno_Adult_Pattern_2.png",
+                "Textures/T_Carnotaurus_Adult_Pattern_3.png"
+            ],
+            "HatchlingPattern": "Textures/T_Carno_Hatchling_Pattern.png",
+            "JuvenilePattern": "Textures/T_Carno_Juvie_Pattern.png",
+            "AlbedoMap": "Textures/T_Carno_Default_New_Albedo.png",
+            "BaseMask": "Textures/T_Carno_Adult_Mouth-Claws-Teeth.png"
+        },
+        "Paramters": {
+            "BlendMode": 0,
+            "ShadingModel": 2,
+            "Colors": {
+                "ClawColor": {
+                    "R": 0.05,
+                    "G": 0.041276,
+                    "B": 0.032552,
+                    "A": 1.0,
+                    "Hex": "3F3932"
+                },
+                "Color1_RedLayer": {
+                    "R": 0.434154,
+                    "G": 0.0865,
+                    "B": 0.039546,
+                    "A": 1.0,
+                    "Hex": "B05338"
+                },
+                "Color2_GreenLayer": {
+                    "R": 0.417885,
+                    "G": 0.309469,
+                    "B": 0.246201,
+                    "A": 1.0,
+                    "Hex": "AD9788"
+                },
+                "Color3_BlueLayer": {
+                    "R": 0.223228,
+                    "G": 0.102242,
+                    "B": 0.08022,
+                    "A": 1.0,
+                    "Hex": "825A50"
+                },
+                "Color4_CyanLayer": {
+                    "R": 0.38643,
+                    "G": 0.212231,
+                    "B": 0.130136,
+                    "A": 1.0,
+                    "Hex": "A77F65"
+                },
+                "Color5_MagentaLayer": {
+                    "R": 0.059511,
+                    "G": 0.043735,
+                    "B": 0.033105,
+                    "A": 1.0,
+                    "Hex": "453B33"
+                }
+            },
+            "Scalars": {
+                "IsFemale": 0.0,
+                "GrowthAmount": 1.0,
+                "Detail_Scale": 8.0,
+                "RefractionDepthBias": 0.0
+            },
+            "Switches": {
+                "UseSkinSystem": true
+            },
+            "Properties": {
+                "PhysMaterial": {
+                    "ObjectName": "PhysicalMaterial'PM_Flesh'",
+                    "ObjectPath": "/Game/TheIsle/MaterialLibrary/PhysicalMaterials/PM_Flesh.0"
+                },
+                "bHasStaticPermutationResource": true,
+                "BasePropertyOverrides": {
+                    "ShadingModel": "EMaterialShadingModel::MSM_Subsurface",
+                    "OpacityMaskClipValue": 0.33
+                },
+                "bIncludedInBaseGame": true
+            },
+            "HasTopDiffuse": false,
+            "HasTopNormals": false,
+            "HasTopSpecularMasks": false,
+            "HasTopEmissive": false,
+            "IsTranslucent": false,
+            "IsNull": false
+        }
+    },
+    "Model": "Carnotaurus.glb"
+}

@@ -1,0 +1,81 @@
+{
+    "Name": "Pachycephalosaurus",
+    "BodyMaterial": {
+        "Textures": {
+            "AdultPatterns": [
+                "Textures/T_Pachycephalosaurus_Adult_Pattern_1.png",
+                "Textures/T_Pachycephalosaurus_Adult_Pattern_2.png",
+                "Textures/T_Pachycephalosaurus_Adult_Pattern_3.png"
+            ],
+            "HatchlingPattern": "Textures/T_Pachycephalosaurus_Hatchling_Pattern.png",
+            "JuvenilePattern": "Textures/T_Pachycephalosaurus_Juvenile_Pattern.png",
+            "AlbedoMap": "Textures/T_Pachy_Default_New_Albedo.png",
+            "BaseMask": "Textures/T_Pachy_Adult_Mouth-Claws_MALE.png"
+        },
+        "Paramters": {
+            "BlendMode": 0,
+            "ShadingModel": 2,
+            "Colors": {
+                "Color1_RedLayer": {
+                    "R": 0.2,
+                    "G": 0.06,
+                    "B": 0.04,
+                    "A": 1.0,
+                    "Hex": "7C4538"
+                },
+                "Color2_GreenLayer": {
+                    "R": 0.215,
+                    "G": 0.200348,
+                    "B": 0.166326,
+                    "A": 1.0,
+                    "Hex": "807C71"
+                },
+                "Color3_BlueLayer": {
+                    "R": 0.06,
+                    "G": 0.068883,
+                    "B": 0.075,
+                    "A": 1.0,
+                    "Hex": "454A4D"
+                },
+                "Color4_CyanLayer": {
+                    "R": 0.15,
+                    "G": 0.126135,
+                    "B": 0.1125,
+                    "A": 1.0,
+                    "Hex": "6C635E"
+                },
+                "Color5_MagentaLayer": {
+                    "R": 0.023047,
+                    "G": 0.023047,
+                    "B": 0.025,
+                    "A": 1.0,
+                    "Hex": "2A2A2B"
+                }
+            },
+            "Scalars": {
+                "IsFemale": 0.0,
+                "GrowthAmount": 0.933333,
+                "MouthGore": 0.0,
+                "RefractionDepthBias": 0.0
+            },
+            "Switches": {
+                "UseSkinSystem": true
+            },
+            "Properties": {
+                "bHasStaticPermutationResource": true,
+                "BasePropertyOverrides": {
+                    "ShadingModel": "EMaterialShadingModel::MSM_Subsurface",
+                    "OpacityMaskClipValue": 0.33
+                },
+                "bIncludedInBaseGame": true
+            },
+            "HasTopDiffuse": false,
+            "HasTopNormals": false,
+            "HasTopSpecularMasks": false,
+            "HasTopEmissive": false,
+            "IsTranslucent": false,
+            "IsNull": false
+        }
+    },
+    "Model": "Pachycephalosaurus.glb"
+}

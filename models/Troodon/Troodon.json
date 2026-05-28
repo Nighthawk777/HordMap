@@ -1,0 +1,101 @@
+{
+    "Name": "Troodon",
+    "BodyMaterial": {
+        "Textures": {
+            "AdultPatterns": [
+                "Textures/T_Troodon_Adult_Pattern_1.png",
+                "Textures/T_Troodon_Adult_Pattern_2.png",
+                "Textures/T_Troodon_Adult_Pattern_3.png"
+            ],
+            "HatchlingPattern": "Textures/T_Troodon_Hatchling_Pattern.png",
+            "JuvenilePattern": "Textures/T_Troodon_Juvenile_Pattern.png",
+            "AlbedoMap": "Textures/T_Troodon_Albedo.png",
+            "BaseMask": "Textures/T_Troodon_Detail_M.png"
+        },
+        "Paramters": {
+            "BlendMode": 0,
+            "ShadingModel": 2,
+            "Colors": {
+                "MouthColor": {
+                    "R": 0.068478,
+                    "G": 0.119538,
+                    "B": 0.201556,
+                    "A": 1.0,
+                    "Hex": "4A617C"
+                },
+                "Color1_RedLayer": {
+                    "R": 0.0481,
+                    "G": 0.241542,
+                    "B": 0.5,
+                    "A": 1.0,
+                    "Hex": "3E87BC"
+                },
+                "Color2_GreenLayer": {
+                    "R": 0.55,
+                    "G": 0.394337,
+                    "B": 0.248998,
+                    "A": 1.0,
+                    "Hex": "C4A989"
+                },
+                "Color3_BlueLayer": {
+                    "R": 0.15,
+                    "G": 0.118085,
+                    "B": 0.077429,
+                    "A": 1.0,
+                    "Hex": "6C604E"
+                },
+                "Color4_CyanLayer": {
+                    "R": 0.3,
+                    "G": 0.199267,
+                    "B": 0.106174,
+                    "A": 1.0,
+                    "Hex": "957B5C"
+                },
+                "Color5_MagentaLayer": {
+                    "R": 0.028426,
+                    "G": 0.0185,
+                    "B": 0.0185,
+                    "A": 1.0,
+                    "Hex": "2F2525"
+                },
+                "Color6_YellowLayer": {
+                    "R": 0.0,
+                    "G": 0.0,
+                    "B": 0.0,
+                    "A": 1.0,
+                    "Hex": "000000"
+                },
+                "Detail_Normal_Intensity": {
+                    "R": 2.0,
+                    "G": 2.0,
+                    "B": 1.0,
+                    "A": 1.0,
+                    "Hex": "FFFFFF"
+                }
+            },
+            "Scalars": {
+                "GrowthAmount": 1.0,
+                "Detail_Scale": 12.0,
+                "RefractionDepthBias": 0.0
+            },
+            "Switches": {
+                "UseSkinSystem": true
+            },
+            "Properties": {
+                "bHasStaticPermutationResource": true,
+                "BasePropertyOverrides": {
+                    "ShadingModel": "EMaterialShadingModel::MSM_Subsurface",
+                    "OpacityMaskClipValue": 0.33
+                },
+                "bIncludedInBaseGame": true
+            },
+            "HasTopDiffuse": false,
+            "HasTopNormals": false,
+            "HasTopSpecularMasks": false,
+            "HasTopEmissive": false,
+            "IsTranslucent": false,
+            "IsNull": false
+        }
+    },
+    "Model": "Troodon.glb"
+}

@@ -1,0 +1,120 @@
+{
+    "Name": "Oviraptor",
+    "BodyMaterial": {
+        "Textures": {
+            "AdultPatterns": [
+                "Textures/T_Oviraptor_Adult_Pattern_1.png"
+            ],
+            "HatchlingPattern": "Textures/T_Oviraptor_Hatchling_Pattern.png",
+            "JuvenilePattern": "Textures/T_Oviraptor_Juvenile_Pattern.png",
+            "AlbedoMap": "Textures/T_Oviraptor_Mask_Albedo.png",
+            "BaseMask": "Textures/T_Oviraptor_Mask_TMC.png"
+        },
+        "Paramters": {
+            "BlendMode": 1,
+            "ShadingModel": 2,
+            "Colors": {
+                "TeethColor": {
+                    "R": 0.35,
+                    "G": 0.25226068,
+                    "B": 0.175,
+                    "A": 1.0,
+                    "Hex": "A08A74"
+                },
+                "MouthColor": {
+                    "R": 0.462077,
+                    "G": 0.155926,
+                    "B": 0.102242,
+                    "A": 1.0,
+                    "Hex": "B56E5A"
+                },
+                "ClawColor": {
+                    "R": 0.434154,
+                    "G": 0.309469,
+                    "B": 0.181164,
+                    "A": 1.0,
+                    "Hex": "B09776"
+                },
+                "Color1_RedLayer": {
+                    "R": 0.274677,
+                    "G": 0.038204,
+                    "B": 0.009134,
+                    "A": 1.0,
+                    "Hex": "8F3718"
+                },
+                "Color2_GreenLayer": {
+                    "R": 0.102242,
+                    "G": 0.102242,
+                    "B": 0.102242,
+                    "A": 1.0,
+                    "Hex": "5A5A5A"
+                },
+                "Color3_BlueLayer": {
+                    "R": 0.024158,
+                    "G": 0.048172,
+                    "B": 0.296138,
+                    "A": 1.0,
+                    "Hex": "2B3E94"
+                },
+                "Color4_CyanLayer": {
+                    "R": 0.015209,
+                    "G": 0.191202,
+                    "B": 0.527115,
+                    "A": 1.0,
+                    "Hex": "2179C0"
+                },
+                "Color5_MagentaLayer": {
+                    "R": 0.016807,
+                    "G": 0.0185,
+                    "B": 0.016807,
+                    "A": 1.0,
+                    "Hex": "232523"
+                },
+                "Color6_YellowLayer": {
+                    "R": 0.0,
+                    "G": 0.0,
+                    "B": 0.0,
+                    "A": 1.0,
+                    "Hex": "000000"
+                },
+                "Detail_Normal_Intensity": {
+                    "R": 2.0,
+                    "G": 2.0,
+                    "B": 1.0,
+                    "A": 1.0,
+                    "Hex": "FFFFFF"
+                }
+            },
+            "Scalars": {
+                "GrowthAmount": 1.0,
+                "Detail_Scale": 12.0,
+                "RefractionDepthBias": 0.0
+            },
+            "Switches": {
+                "IsOpacity": true,
+                "UseSkinSystem": true
+            },
+            "Properties": {
+                "PhysMaterial": {
+                    "ObjectName": "PhysicalMaterial'PM_Flesh'",
+                    "ObjectPath": "/Game/TheIsle/MaterialLibrary/PhysicalMaterials/PM_Flesh.0"
+                },
+                "bHasStaticPermutationResource": true,
+                "BasePropertyOverrides": {
+                    "bOverride_BlendMode": true,
+                    "BlendMode": "EBlendMode::BLEND_Masked",
+                    "ShadingModel": "EMaterialShadingModel::MSM_Subsurface",
+                    "OpacityMaskClipValue": 0.33
+                },
+                "bIncludedInBaseGame": true
+            },
+            "HasTopDiffuse": false,
+            "HasTopNormals": false,
+            "HasTopSpecularMasks": false,
+            "HasTopEmissive": false,
+            "IsTranslucent": false,
+            "IsNull": false
+        }
+    },
+    "Model": "Oviraptor.glb"
+}

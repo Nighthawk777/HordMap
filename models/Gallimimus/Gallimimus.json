@@ -1,0 +1,94 @@
+{
+    "Name": "Gallimimus",
+    "BodyMaterial": {
+        "Textures": {
+            "AdultPatterns": [
+                "Textures/T_Gallimimus_Adult_Pattern_1.png",
+                "Textures/T_Gallimimus_Adult_Pattern_2.png",
+                "Textures/T_Gallimimus_Adult_Pattern_3.png"
+            ],
+            "HatchlingPattern": "Textures/T_Gallimimus_Hatchling_Pattern.png",
+            "JuvenilePattern": "Textures/T_Gallimimus_Juvenile_Pattern.png",
+            "AlbedoMap": "Textures/T_Galli_Adult_Base_Albedo.png",
+            "BaseMask": "Textures/T_Gallimimus_Adult_TMC.png"
+        },
+        "Paramters": {
+            "BlendMode": 0,
+            "ShadingModel": 2,
+            "Colors": {
+                "Color1_RedLayer": {
+                    "R": 0.090196,
+                    "G": 0.196078,
+                    "B": 0.145098,
+                    "A": 1.0,
+                    "Hex": "557A6A"
+                },
+                "Color2_GreenLayer": {
+                    "R": 0.756863,
+                    "G": 0.564706,
+                    "B": 0.345098,
+                    "A": 1.0,
+                    "Hex": "E2C69F"
+                },
+                "Color3_BlueLayer": {
+                    "R": 0.4,
+                    "G": 0.219608,
+                    "B": 0.117647,
+                    "A": 1.0,
+                    "Hex": "AA8160"
+                },
+                "Color4_CyanLayer": {
+                    "R": 0.678431,
+                    "G": 0.411765,
+                    "B": 0.14902,
+                    "A": 1.0,
+                    "Hex": "D7AC6C"
+                },
+                "Color5_MagentaLayer": {
+                    "R": 0.141176,
+                    "G": 0.086275,
+                    "B": 0.078431,
+                    "A": 1.0,
+                    "Hex": "69534F"
+                },
+                "Color6_YellowLayer": {
+                    "R": 0.0,
+                    "G": 0.0,
+                    "B": 0.0,
+                    "A": 1.0,
+                    "Hex": "000000"
+                },
+                "Detail_Normal_Intensity": {
+                    "R": 2.0,
+                    "G": 2.0,
+                    "B": 1.0,
+                    "A": 1.0,
+                    "Hex": "FFFFFF"
+                }
+            },
+            "Scalars": {
+                "GrowthAmount": 1.0,
+                "Detail_Scale": 8.0,
+                "RefractionDepthBias": 0.0
+            },
+            "Switches": {
+                "UseSkinSystem": true
+            },
+            "Properties": {
+                "bHasStaticPermutationResource": true,
+                "BasePropertyOverrides": {
+                    "ShadingModel": "EMaterialShadingModel::MSM_Subsurface",
+                    "OpacityMaskClipValue": 0.33
+                },
+                "bIncludedInBaseGame": true
+            },
+            "HasTopDiffuse": false,
+            "HasTopNormals": false,
+            "HasTopSpecularMasks": false,
+            "HasTopEmissive": false,
+            "IsTranslucent": false,
+            "IsNull": false
+        }
+    },
+    "Model": "Gallimimus.glb"
+}

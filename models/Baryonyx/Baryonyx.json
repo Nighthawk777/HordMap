@@ -1,0 +1,99 @@
+{
+    "Name": "Baryonyx",
+    "BodyMaterial": {
+        "Textures": {
+            "AdultPatterns": [
+                "Textures/T_Baryonyx_Adult_Pattern_1.png",
+                "Textures/T_Baryonyx_Adult_Pattern_2.png",
+                "Textures/T_Baryonyx_Adult_Pattern_3.png"
+            ],
+            "HatchlingPattern": "Textures/T_Baryonyx_Hatchling_Pattern.png",
+            "JuvenilePattern": "Textures/T_Baryonyx_Juvenile_Pattern.png",
+            "AlbedoMap": "Textures/T_Baryonyx_Mask_Albedo.png",
+            "BaseMask": "Textures/T_Baryonyx_Mask_TMC.png"
+        },
+        "Paramters": {
+            "BlendMode": 0,
+            "ShadingModel": 2,
+            "Colors": {
+                "Color1_RedLayer": {
+                    "R": 0.072272,
+                    "G": 0.132868,
+                    "B": 0.152926,
+                    "A": 1.0,
+                    "Hex": "4C666D"
+                },
+                "Color2_GreenLayer": {
+                    "R": 0.346704,
+                    "G": 0.266356,
+                    "B": 0.191202,
+                    "A": 1.0,
+                    "Hex": "9F8D79"
+                },
+                "Color3_BlueLayer": {
+                    "R": 0.152926,
+                    "G": 0.06301,
+                    "B": 0.042311,
+                    "A": 1.0,
+                    "Hex": "6D473A"
+                },
+                "Color4_CyanLayer": {
+                    "R": 0.287441,
+                    "G": 0.152926,
+                    "B": 0.08022,
+                    "A": 1.0,
+                    "Hex": "926D50"
+                },
+                "Color5_MagentaLayer": {
+                    "R": 0.013702,
+                    "G": 0.013702,
+                    "B": 0.013702,
+                    "A": 1.0,
+                    "Hex": "1F1F1F"
+                },
+                "Color6_YellowLayer": {
+                    "R": 0.0,
+                    "G": 0.0,
+                    "B": 0.0,
+                    "A": 1.0,
+                    "Hex": "000000"
+                },
+                "Detail_Normal_Intensity": {
+                    "R": 2.0,
+                    "G": 2.0,
+                    "B": 1.0,
+                    "A": 1.0,
+                    "Hex": "FFFFFF"
+                }
+            },
+            "Scalars": {
+                "IsFemale": 0.0,
+                "GrowthAmount": 1.0,
+                "Detail_Scale": 12.0,
+                "RefractionDepthBias": 0.0
+            },
+            "Switches": {
+                "UseSkinSystem": true
+            },
+            "Properties": {
+                "PhysMaterial": {
+                    "ObjectName": "PhysicalMaterial'PM_Flesh'",
+                    "ObjectPath": "/Game/TheIsle/MaterialLibrary/PhysicalMaterials/PM_Flesh.0"
+                },
+                "bHasStaticPermutationResource": true,
+                "BasePropertyOverrides": {
+                    "ShadingModel": "EMaterialShadingModel::MSM_Subsurface",
+                    "OpacityMaskClipValue": 0.33
+                },
+                "bIncludedInBaseGame": true
+            },
+            "HasTopDiffuse": false,
+            "HasTopNormals": false,
+            "HasTopSpecularMasks": false,
+            "HasTopEmissive": false,
+            "IsTranslucent": false,
+            "IsNull": false
+        }
+    },
+    "Model": "Baryonyx.glb"
+}

@@ -1,0 +1,93 @@
+{
+    "Name": "Diabloceratops",
+    "BodyMaterial": {
+        "Textures": {
+            "AdultPatterns": [
+                "Textures/T_Diabloceratops_Adult_Pattern_1.png",
+                "Textures/T_Diabloceratops_Adult_Pattern_2.png",
+                "Textures/T_Diabloceratops_Adult_Pattern_3.png"
+            ],
+            "HatchlingPattern": "Textures/T_Diabloceratops_Hatch_Pattern.png",
+            "JuvenilePattern": "Textures/T_Diabloceratops_Juvie_Pattern.png",
+            "AlbedoMap": "Textures/T_Diablo_Albedo.png",
+            "BaseMask": "Textures/T_Diablo_Adult_Mouth-Claws.png"
+        },
+        "Paramters": {
+            "BlendMode": 0,
+            "ShadingModel": 2,
+            "Colors": {
+                "Color1_RedLayer": {
+                    "R": 0.415686,
+                    "G": 0.2,
+                    "B": 0.054902,
+                    "A": 1.0,
+                    "Hex": "AD7C42"
+                },
+                "Color2_GreenLayer": {
+                    "R": 0.556863,
+                    "G": 0.384314,
+                    "B": 0.270588,
+                    "A": 1.0,
+                    "Hex": "C5A78E"
+                },
+                "Color3_BlueLayer": {
+                    "R": 0.258824,
+                    "G": 0.192157,
+                    "B": 0.086275,
+                    "A": 1.0,
+                    "Hex": "8B7953"
+                },
+                "Color4_CyanLayer": {
+                    "R": 0.415686,
+                    "G": 0.282353,
+                    "B": 0.090196,
+                    "A": 1.0,
+                    "Hex": "AD9155"
+                },
+                "Color5_MagentaLayer": {
+                    "R": 0.12549,
+                    "G": 0.094118,
+                    "B": 0.058824,
+                    "A": 1.0,
+                    "Hex": "635644"
+                },
+                "Color6_YellowLayer": {
+                    "R": 0.0,
+                    "G": 0.0,
+                    "B": 0.0,
+                    "A": 1.0,
+                    "Hex": "000000"
+                },
+                "Detail_Normal_Intensity": {
+                    "R": 2.0,
+                    "G": 2.0,
+                    "B": 1.0,
+                    "A": 1.0,
+                    "Hex": "FFFFFF"
+                }
+            },
+            "Scalars": {
+                "Detail_Scale": 10.0,
+                "RefractionDepthBias": 0.0
+            },
+            "Switches": {
+                "UseSkinSystem": true
+            },
+            "Properties": {
+                "bHasStaticPermutationResource": true,
+                "BasePropertyOverrides": {
+                    "ShadingModel": "EMaterialShadingModel::MSM_Subsurface",
+                    "OpacityMaskClipValue": 0.33
+                },
+                "bIncludedInBaseGame": true
+            },
+            "HasTopDiffuse": false,
+            "HasTopNormals": false,
+            "HasTopSpecularMasks": false,
+            "HasTopEmissive": false,
+            "IsTranslucent": false,
+            "IsNull": false
+        }
+    },
+    "Model": "Diabloceratops.glb"
+}

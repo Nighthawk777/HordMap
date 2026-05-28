@@ -1,0 +1,113 @@
+{
+    "Name": "Omniraptor",
+    "BodyMaterial": {
+        "Textures": {
+            "AdultPatterns": [
+                "Textures/T_Omniraptor_Adult_Pattern_1.png",
+                "Textures/T_Omniraptor_Adult_Pattern_2.png",
+                "Textures/T_Omniraptor_Adult_Pattern_3.png"
+            ],
+            "HatchlingPattern": "Textures/T_Omniraptor_Hatchling_Pattern.png",
+            "JuvenilePattern": "Textures/T_Omniraptor_Juvenile_Pattern.png",
+            "AlbedoMap": "Textures/T_Omniraptor_Albedo.png",
+            "BaseMask": "Textures/T_Omniraptor_Detail_M.png"
+        },
+        "Paramters": {
+            "BlendMode": 0,
+            "ShadingModel": 2,
+            "Colors": {
+                "Color1_RedLayer": {
+                    "R": 0.3,
+                    "G": 0.155972,
+                    "B": 0.045,
+                    "A": 1.0,
+                    "Hex": "956E3C"
+                },
+                "Color2_GreenLayer": {
+                    "R": 0.4,
+                    "G": 0.313846,
+                    "B": 0.212307,
+                    "A": 1.0,
+                    "Hex": "AA987F"
+                },
+                "Color3_BlueLayer": {
+                    "R": 0.15,
+                    "G": 0.07525,
+                    "B": 0.0525,
+                    "A": 1.0,
+                    "Hex": "6C4D41"
+                },
+                "Color4_CyanLayer": {
+                    "R": 0.25,
+                    "G": 0.142857,
+                    "B": 0.069328,
+                    "A": 1.0,
+                    "Hex": "89694A"
+                },
+                "Color5_MagentaLayer": {
+                    "R": 0.04,
+                    "G": 0.03125,
+                    "B": 0.026,
+                    "A": 1.0,
+                    "Hex": "38312C"
+                },
+                "Color6_YellowLayer": {
+                    "R": 0.0,
+                    "G": 0.0,
+                    "B": 0.0,
+                    "A": 1.0,
+                    "Hex": "000000"
+                },
+                "Detail_Normal_Intensity": {
+                    "R": 2.0,
+                    "G": 2.0,
+                    "B": 1.0,
+                    "A": 1.0,
+                    "Hex": "FFFFFF"
+                }
+            },
+            "Scalars": {
+                "IsFemale": 0.0,
+                "GrowthAmount": 1.0,
+                "Detail_Scale": 12.0,
+                "BloodAmount": 0.0,
+                "DirtAmount": 0.0,
+                "DryBloodAmount": 0.0,
+                "DryDuckweedAmount": 0.0,
+                "DryMudAmount": 0.0,
+                "DuckweedAmount": 0.0,
+                "DustAmount": 0.0,
+                "FullWetAmount": 0.0,
+                "LowFood": 0.0,
+                "LowHealth": 0.0,
+                "MorphCarcassGore": 0.0,
+                "MouthGore": 0.0,
+                "MudAmount": 0.0,
+                "RottenCarcassGore": 0.0,
+                "RefractionDepthBias": 0.0
+            },
+            "Switches": {
+                "UseSkinSystem": true
+            },
+            "Properties": {
+                "PhysMaterial": {
+                    "ObjectName": "PhysicalMaterial'PM_Flesh'",
+                    "ObjectPath": "/Game/TheIsle/MaterialLibrary/PhysicalMaterials/PM_Flesh.0"
+                },
+                "bHasStaticPermutationResource": true,
+                "BasePropertyOverrides": {
+                    "ShadingModel": "EMaterialShadingModel::MSM_Subsurface",
+                    "OpacityMaskClipValue": 0.33
+                },
+                "bIncludedInBaseGame": true
+            },
+            "HasTopDiffuse": false,
+            "HasTopNormals": false,
+            "HasTopSpecularMasks": false,
+            "HasTopEmissive": false,
+            "IsTranslucent": false,
+            "IsNull": false
+        }
+    },
+    "Model": "Omniraptor.glb"
+}
